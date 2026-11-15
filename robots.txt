@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://jronak813.github.io/ecodrone-ai/sitemap.xml
