@@ -802,14 +802,17 @@ details{margin-top:12px;color:var(--mut)}summary{cursor:pointer;font-weight:600}
 
 <!-- 2. SENSORS -->
 <section class="step">
-<div class="sh"><span class="num">2</span><h2>Sensors: RGB colour + light</h2><span id="c2" class="chip">Not connected</span></div>
-<small>The RGB sensor checks the real colour of the ground; the light sensor checks how bright it is. Both change how the scan works and how sure the result is.</small>
+<div class="sh"><span class="num">2</span><h2>Sensor box: RGB, light, GPS + LiDAR</h2><span id="c2" class="chip">Not connected</span></div>
+<small>The RGB sensor checks the real colour of the ground, the light sensor checks how bright it is, the LiDAR keeps the RGB sensor at the right distance, and the GPS records exactly where each reading was taken.</small>
 <div class="sens">
 <div class="sbox"><i class="swatch" id="sw"></i><span class="note" style="font-weight:600">RGB colour sensor</span><b id="sRGB">–</b><span id="sRGBt" class="pill">no reading</span><br><small id="sRGBn">Readings: 0</small></div>
 <div class="sbox"><span class="note" style="font-weight:600">Light sensor</span><b id="sL">–</b><span id="sLt" class="pill">no reading</span><div class="lbar"><i id="lbi"></i></div></div>
+<div class="sbox"><span class="note" style="font-weight:600">LiDAR distance</span><b id="sD">–</b><span id="sDt" class="pill">no reading</span><br><small>Hold the RGB sensor 2–8 cm above the ground.</small></div>
+<div class="sbox"><span class="note" style="font-weight:600">GPS</span><b id="sG" style="font-size:18px">–</b><span id="sGt" class="pill">no reading</span><br><small id="sGn"></small></div>
 </div>
 <div class="row">
-<button class="ghost" onclick="serialConnect()">🔌 Connect Arduino (USB)</button>
+<button class="ghost" onclick="bleConnect()">📶 Connect sensor box (Bluetooth)</button>
+<button class="ghost" onclick="serialConnect()">🔌 Connect by USB</button>
 <button class="ghost" onclick="simSensors()">Simulate sensors</button>
 <button class="ghost sm" onclick="resetSensors()">Reset</button>
 </div>
@@ -822,7 +825,7 @@ details{margin-top:12px;color:var(--mut)}summary{cursor:pointer;font-weight:600}
 </div>
 <div class="row"><button class="ghost sm" onclick="manualAdd()">Add reading</button><small>Take readings at different spots on the land: more spots = better result.</small></div>
 </details>
-<small id="serNote">Arduino sends one line per reading, e.g. <b>R:120,G:80,B:60,L:55</b> at 9600 baud. USB connection works in Chrome or Edge on a computer.</small>
+<small id="serNote">The ESP32 sensor box sends lines like <b style="word-break:break-all">R:120,G:80,B:60,L:55,D:3.2,LAT:24.58540,LON:73.71250,SAT:7,SAVE:1</b>. Press the box's <b>BOOT</b> button to save a reading for the spot you are measuring. Bluetooth works in Chrome on Android phones and computers; USB (115200 baud) works in Chrome or Edge on a computer. Older boards that send only R, G, B and L still work.</small>
 </section>
 
 <!-- 3. RESULT -->
@@ -858,7 +861,7 @@ details{margin-top:12px;color:var(--mut)}summary{cursor:pointer;font-weight:600}
 <section class="step">
 <div class="sh"><span class="num">4</span><h2>Where the drone took the photo</h2><span id="c4" class="chip" aria-live="polite">Waiting</span></div>
 <div class="g2"><div><label for="lat">Latitude</label><input id="lat" type="number" step="any" inputmode="decimal"></div><div><label for="lon">Longitude</label><input id="lon" type="number" step="any" inputmode="decimal"></div></div>
-<div class="row"><button class="ghost" onclick="getPos().then(buildMsg)">Use this device’s location</button><a id="maps" target="_blank" rel="noopener" href="#">Open in Google Maps</a></div>
+<div class="row"><button class="ghost" onclick="getPos().then(buildMsg)">Use this device’s location</button><button class="ghost" onclick="useSensorGPS()">Use sensor box GPS</button><a id="maps" target="_blank" rel="noopener" href="#">Open in Google Maps</a></div>
 <small id="locNote">The location is read from the photo’s GPS tags. If there are none, the device location is used.</small>
 <div class="field"><label for="site">Site name</label><input id="site" type="text" placeholder="e.g. Fateh Sagar Lake, north bank"></div>
 <div class="g2 field">
@@ -951,7 +954,11 @@ const cellLevel=p=>p>=5?'HIGH':p>=1?'MEDIUM':'LOW';                             
 const worst=(a,b)=>{const o=['LOW','MEDIUM','HIGH'];return o[Math.max(o.indexOf(a),o.indexOf(b))]};
 
 /* ================= 5. SENSORS (defined early because detection uses them) ================= */
-let sens={r:null,g:null,b:null,light:null,readings:[],src:''};
+let sens={r:null,g:null,b:null,light:null,dist:null,gps:null,readings:[],src:'',sawSave:false};
+const D_MIN=2,D_MAX=8; /* LiDAR: RGB readings count only when the sensor is 2–8 cm above the ground */
+const distOK=d=>d==null||(d>=D_MIN&&d<=D_MAX);
+const okReads=()=>sens.readings.filter(x=>x.ok);
+const gpsFresh=()=>sens.gps&&sens.gps.fix&&Date.now()-sens.gps.at<180000;
 function rgbHsv(r,g,b){const mx=Math.max(r,g,b),mn=Math.min(r,g,b),v=mx/255,s=mx?(mx-mn)/mx:0;let h=0;if(mx!==mn){const k=mx-mn;h=mx===r?((g-b)/k+6)%6:mx===g?(b-r)/k+2:(r-g)/k+4;h*=60}return{h,s,v}}
 /* what does a colour look like? used for both camera pixels and the RGB sensor */
 function colourClass(r,g,b,th){
@@ -964,27 +971,32 @@ function naturalName(r,g,b){const{h,s,v}=rgbHsv(r,g,b);if(v<.18)return'dark soil
 /* light sensor → light condition → detection thresholds */
 function lightCond(){const L=sens.light;if(L==null)return'unknown';return L<20?'low':L>85?'glare':'good'}
 function thresholds(){const c=lightCond();return{whiteV:c==='glare'?.93:c==='low'?.75:.85,satMin:c==='low'?.45:.55,vMin:c==='low'?.35:.45}}
-function sensorPlasticShare(){const n=sens.readings.length;if(!n)return null;return sens.readings.filter(x=>x.plastic).length/n}
-function addReading(r,g,b,L,src){
+function sensorPlasticShare(){const o=okReads(),n=o.length;if(!n)return null;return o.filter(x=>x.plastic).length/n}
+function addReading(r,g,b,L,src,dist){
  r=clamp(r,0,255);g=clamp(g,0,255);b=clamp(b,0,255);
  const t=thresholds(),cls=colourClass(r,g,b,t);
- sens.r=r;sens.g=g;sens.b=b;if(L!=null&&isFinite(L))sens.light=clamp(L,0,100);sens.src=src;
- sens.readings.push({r,g,b,plastic:!!cls,cls});if(sens.readings.length>200)sens.readings.shift();
+ sens.r=r;sens.g=g;sens.b=b;if(L!=null&&isFinite(L))sens.light=clamp(L,0,100);if(dist!=null)sens.dist=dist;sens.src=src;
+ const ok=distOK(dist==null?null:dist),gp=gpsFresh()?{lat:sens.gps.lat,lon:sens.gps.lon}:{};
+ sens.readings.push({r,g,b,plastic:!!cls,cls,ok,dist:dist==null?null:dist,...gp});if(sens.readings.length>200)sens.readings.shift();
  drawSensors();rescanSoon();
 }
+/* live values from the box that are not saved as a reading (between BOOT presses) */
+function liveUpdate(r,g,b,L,dist,src){if(r!=null){sens.r=clamp(r,0,255);sens.g=clamp(g,0,255);sens.b=clamp(b,0,255)}if(L!=null)sens.light=clamp(L,0,100);if(dist!=null)sens.dist=dist;sens.src=src;drawSensors(true)}
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,+v));
-function drawSensors(){
+function drawSensors(live){
  const has=sens.r!=null;
  if(has){$('sw').style.background='rgb('+sens.r+','+sens.g+','+sens.b+')';$('sRGB').textContent=sens.r+', '+sens.g+', '+sens.b;
-  const last=sens.readings[sens.readings.length-1],sh=sensorPlasticShare();
-  $('sRGBt').textContent=last.plastic?'Looks like '+last.cls+' plastic':'Looks like '+naturalName(sens.r,sens.g,sens.b);$('sRGBt').className='pill'+(last.plastic?' bad':'');
-  $('sRGBn').textContent='Readings: '+sens.readings.length+' · plastic-like: '+sens.readings.filter(x=>x.plastic).length+' ('+Math.round(sh*100)+'%)'}
+  const cls=colourClass(sens.r,sens.g,sens.b,thresholds()),o=okReads(),sh=sensorPlasticShare(),far=sens.readings.length-o.length;
+  $('sRGBt').textContent=(live?'Live: ':'')+(cls?'Looks like '+cls+' plastic':'Looks like '+naturalName(sens.r,sens.g,sens.b));$('sRGBt').className='pill'+(cls?' bad':'');
+  $('sRGBn').textContent='Saved readings: '+o.length+(o.length?' · plastic-like: '+o.filter(x=>x.plastic).length+' ('+Math.round(sh*100)+'%)':'')+(far?' · '+far+' skipped (too far)':'')}
+ if(sens.dist!=null){const ok=distOK(sens.dist);$('sD').textContent=(+sens.dist).toFixed(1)+' cm';$('sDt').textContent=ok?'Good distance':sens.dist<D_MIN?'Too close – lift up':'Too far – move closer';$('sDt').className='pill'+(ok?'':' mid')}
+ if(sens.gps){const g=sens.gps;if(g.fix){$('sG').textContent=g.lat.toFixed(5)+', '+g.lon.toFixed(5);$('sGt').textContent='GPS fixed';$('sGt').className='pill'}else{$('sG').textContent='Searching…';$('sGt').textContent='No fix yet – go outside';$('sGt').className='pill mid'}$('sGn').textContent=g.sats!=null?'Satellites: '+g.sats:''}
  if(sens.light!=null){const c=lightCond();$('sL').textContent=Math.round(sens.light)+'%';
   $('sLt').textContent=c==='low'?'Low light – scan is less sure':c==='glare'?'Very bright – sun glare filtered':'Good light';$('sLt').className='pill'+(c==='good'?'':' mid');
   $('lbi').style.left='calc('+sens.light+'% - 2px)'}
- if(has||sens.light!=null)chip('c2',sens.src==='serial'?'Arduino connected':sens.src==='sim'?'Simulated':'Manual readings',1);
+ if(has||sens.light!=null||sens.gps)chip('c2',sens.src==='serial'?'Connected by USB':sens.src==='ble'?'Connected by Bluetooth':sens.src==='sim'?'Simulated':'Manual readings',1);
 }
-function resetSensors(){sens={r:null,g:null,b:null,light:null,readings:[],src:''};$('sw').style.background='';['sRGB','sL'].forEach(i=>$(i).textContent='–');$('sRGBt').textContent=$('sLt').textContent='no reading';$('sRGBt').className=$('sLt').className='pill';$('sRGBn').textContent='Readings: 0';$('lbi').style.left='0';chip('c2','Not connected');rescanSoon()}
+function resetSensors(){sens={r:null,g:null,b:null,light:null,dist:null,gps:null,readings:[],src:'',sawSave:false};$('sw').style.background='';['sRGB','sL','sD','sG'].forEach(i=>$(i).textContent='–');['sRGBt','sLt','sDt','sGt'].forEach(i=>{$(i).textContent='no reading';$(i).className='pill'});$('sGn').textContent='';$('sRGBn').textContent='Readings: 0';$('lbi').style.left='0';chip('c2','Not connected');rescanSoon()}
 function manualAdd(){const r=$('iR').value,g=$('iG').value,b=$('iB').value,L=$('iL').value;
  if(r===''||g===''||b===''){if(L!==''){sens.light=clamp(L,0,100);sens.src='manual';drawSensors();rescanSoon()}return}
  addReading(+r,+g,+b,L===''?null:+L,'manual')}
@@ -993,21 +1005,41 @@ let simT=null;
 function simSensors(){
  clearInterval(simT);let n=0;const L=55+Math.random()*20;
  const sample=[[150,110,70],[120,90,60],[90,120,60],[30,90,200],[160,120,80],[240,240,235],[110,85,55],[200,30,40],[140,105,65],[95,130,70],[130,95,60],[230,200,30]];
- simT=setInterval(()=>{const s=sample[n%sample.length],j=()=>Math.round((Math.random()-.5)*16);addReading(s[0]+j(),s[1]+j(),s[2]+j(),L+(Math.random()-.5)*6,'sim');if(++n>=12)clearInterval(simT)},250);
+ sens.gps={lat:24.5854+(Math.random()-.5)*.01,lon:73.7125+(Math.random()-.5)*.01,sats:8,fix:true,at:Date.now()};
+ simT=setInterval(()=>{const s=sample[n%sample.length],j=()=>Math.round((Math.random()-.5)*16);sens.gps.at=Date.now();addReading(s[0]+j(),s[1]+j(),s[2]+j(),L+(Math.random()-.5)*6,'sim',n===5?11.5:+(3+Math.random()*3).toFixed(1));if(++n>=12)clearInterval(simT)},250);
 }
 /* Arduino over USB (Web Serial) – lines like R:120,G:80,B:60,L:55 */
+const SERIAL_BAUD=115200; /* the ESP32 box uses 115200; the older TCS3200 Uno sketch used 9600 */
 async function serialConnect(){
  if(!('serial' in navigator)){$('serNote').textContent='USB connection needs Chrome or Edge on a computer. On a phone, type the readings by hand or use Simulate.';return}
- try{const port=await navigator.serial.requestPort();await port.open({baudRate:9600});chip('c2','Arduino connected',1);
+ try{const port=await navigator.serial.requestPort();await port.open({baudRate:SERIAL_BAUD});chip('c2','Connected by USB',1);
   const dec=new TextDecoderStream();port.readable.pipeTo(dec.writable);const rd=dec.readable.getReader();let buf='';
   while(true){const{value,done}=await rd.read();if(done)break;buf+=value;let i;
    while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+1);parseLine(line)}}
  }catch(e){chip('c2','Not connected',2);$('serNote').textContent='Could not connect: '+(e.message||e)}
 }
-function parseLine(line){
- const g=k=>{const m=line.match(new RegExp(k+'\\s*[:=]\\s*(-?[\\d.]+)','i'));return m?+m[1]:null};
- const r=g('R'),gg=g('G'),b=g('B'),L=g('L');
- if(r!=null&&gg!=null&&b!=null)addReading(r,gg,b,L,'serial');else if(L!=null){sens.light=clamp(L,0,100);sens.src='serial';drawSensors()}
+function parseLine(line,src){
+ src=src||'serial';
+ const g=k=>{const m=line.match(new RegExp('(?:^|,)\\s*'+k+'\\s*[:=]\\s*(-?[\\d.]+)','i'));return m?+m[1]:null};
+ const r=g('R'),gg=g('G'),b=g('B'),L=g('L'),D=g('D'),lat=g('LAT'),lon=g('LON'),sat=g('SAT'),save=g('SAVE'),gfix=g('GPS');
+ if(lat!=null&&lon!=null&&!(lat===0&&lon===0))sens.gps={lat,lon,sats:sat,fix:true,at:Date.now()};
+ else if(gfix===0||sat!=null)sens.gps={...(sens.gps||{}),sats:sat,fix:false,at:Date.now()};
+ if(save!=null)sens.sawSave=true;
+ const rgb=r!=null&&gg!=null&&b!=null;
+ if(rgb&&(save===1||!sens.sawSave))addReading(r,gg,b,L,src,D);
+ else liveUpdate(rgb?r:null,gg,b,L,D,src);
+}
+/* Bluetooth (Web Bluetooth, Nordic UART service) – Chrome on Android and computers */
+const NUS='6e400001-b5a3-f393-e0a9-e50e24dcca9e',NUS_TX='6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+async function bleConnect(){
+ if(!navigator.bluetooth){$('serNote').textContent='Bluetooth needs Chrome on an Android phone or a computer (iPhone browsers do not support it). Use USB on a computer, or type readings by hand.';return}
+ try{const dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:'EcoDrone'},{services:[NUS]}],optionalServices:[NUS]});
+  const srv=await dev.gatt.connect(),svc=await srv.getPrimaryService(NUS),ch=await svc.getCharacteristic(NUS_TX);
+  let buf='';const dec=new TextDecoder();
+  ch.addEventListener('characteristicvaluechanged',e=>{buf+=dec.decode(e.target.value);let i;while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+1);if(line)parseLine(line,'ble')}});
+  await ch.startNotifications();chip('c2','Connected by Bluetooth',1);
+  dev.addEventListener('gattserverdisconnected',()=>chip('c2','Bluetooth disconnected',2));
+ }catch(e){if(e&&e.name==='NotFoundError')return;chip('c2','Not connected',2);$('serNote').textContent='Could not connect: '+(e.message||e)}
 }
 let rsT=null;function rescanSoon(){clearTimeout(rsT);rsT=setTimeout(()=>{if(res&&base.width&&!res.server){analyze(false);buildMsg()}},400)}
 
@@ -1107,7 +1139,7 @@ function finish(r,animate){
  r.macL=macLevel(r.macP,r.items);r.micL=micLevel(r.micP);
  /* sensor effect on microplastic: many plastic-like RGB readings raise the micro zone */
  const sh=sensorPlasticShare();r.sensorShare=sh;r.sensorBoost=false;
- if(sh!=null&&sens.readings.length>=5){const sl=sh>=.4?'HIGH':sh>=.15?'MEDIUM':'LOW';if(worst(sl,r.micL)!==r.micL){r.micL=worst(sl,r.micL);r.sensorBoost=true}}
+ if(sh!=null&&okReads().length>=5){const sl=sh>=.4?'HIGH':sh>=.15?'MEDIUM':'LOW';if(worst(sl,r.micL)!==r.micL){r.micL=worst(sl,r.micL);r.sensorBoost=true}}
  r.lvl=worst(r.macL,r.micL);r.conf=confidence(r);
  res=r;showNumbers();
  if(animate)playScan();else render();
@@ -1116,7 +1148,7 @@ function confidence(r){
  const why=[];let c=72;
  const lc=lightCond();
  if(lc==='good'){c+=10;why.push('+10 good light (light sensor)')}else if(lc==='low'){c-=10;why.push('−10 low light (light sensor)')}else if(lc==='glare'){c-=4;why.push('−4 bright glare (light sensor)')}else why.push('no light sensor reading');
- const n=sens.readings.length;
+ const n=okReads().length;
  if(n>=5){const agree=(r.sensorShare>=.15)===(r.lvl!=='LOW');c+=agree?10:-5;why.push((agree?'+10 RGB sensor agrees':'−5 RGB sensor disagrees')+' ('+n+' readings)')}else if(n)why.push('+0 only '+n+' RGB reading(s), need 5+');else why.push('no RGB sensor readings');
  if(r.uv){c+=6;why.push('+6 UV photo used for microplastic')}
  if(parseFloat($('alt').value)>0){c+=3;why.push('+3 flight height known (real size)')}
@@ -1284,10 +1316,13 @@ const hasLoc=()=>$('lat').value!==''&&$('lon').value!=='';
 const link=()=>'https://www.google.com/maps?q='+$('lat').value+','+$('lon').value;
 async function locate(g,isDemo){
  if(g){$('lat').value=g.lat.toFixed(5);$('lon').value=g.lon.toFixed(5);$('locNote').textContent=isDemo?'Demo location near Udaipur.':'Location read from the photo’s GPS tags (where the drone was).';chip('c4','Found',1);return}
+ if(gpsFresh()){useSensorGPS(true);return}
  $('locNote').textContent='This photo has no GPS tags. Asking the device for its location…';
  const p=await getPos();if(!p){$('locNote').textContent='Location is blocked or switched off. Type the latitude and longitude by hand.';chip('c4','Needs input',2)}
  else $('locNote').textContent='This photo had no GPS tags, so this device’s location is used. Check it matches where the drone flew.';
 }
+function useSensorGPS(auto){if(!gpsFresh()){$('locNote').textContent='The sensor box has no GPS fix yet. Take it outside under open sky and wait 1–2 minutes.';chip('c4','Needs input',2);return}
+ $('lat').value=sens.gps.lat.toFixed(5);$('lon').value=sens.gps.lon.toFixed(5);$('locNote').textContent=(auto?'This photo has no GPS tags, so ':'')+'the location comes from the sensor box GPS'+(sens.gps.sats?' ('+sens.gps.sats+' satellites)':'')+'.';chip('c4','Found',1);if(!auto)buildMsg()}
 function getPos(){return new Promise(ok=>{
  if(!navigator.geolocation)return ok(null);
  navigator.geolocation.getCurrentPosition(p=>{$('lat').value=p.coords.latitude.toFixed(5);$('lon').value=p.coords.longitude.toFixed(5);$('locNote').textContent='Location taken from this device’s GPS.';chip('c4','Found',1);ok(p)},
@@ -1329,7 +1364,7 @@ function focusCur(){if(cur&&hasLoc()&&initMap())map.setView([+$('lat').value,+$(
 const fmtTime=d=>d?new Date(d).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
 function buildMsg(){
  $('maps').href=hasLoc()?link():'#';showArea();if(!res)return;
- const a=areaM2(),site=$('site').value.trim(),notes=$('notes').value.trim(),who=$('who').value.trim(),Z=ZONE[res.lvl],s=res.grid.share,lc=lightCond(),n=sens.readings.length;
+ const a=areaM2(),site=$('site').value.trim(),notes=$('notes').value.trim(),who=$('who').value.trim(),Z=ZONE[res.lvl],s=res.grid.share,lc=lightCond(),n=okReads().length;
  if(!msgEdited)$('msg').value=[
   '🚨 EcoDrone AI – Plastic alert',
   site?'Site: '+site:null,
@@ -1337,7 +1372,7 @@ function buildMsg(){
   'Macroplastic: '+res.macP.toFixed(1)+'% of land, '+res.items+' pieces '+ZONE[res.macL].emoji+(a!==null?' (about '+fmtA(a)+' m²)':''),
   'Microplastic: '+res.micP.toFixed(2)+'% '+(res.uv?'(UV photo)':'('+(res.specksN||0)+' specks)')+' '+ZONE[res.micL].emoji,
   'Land split: 🔴 '+Math.round(s.HIGH)+'%  🟠 '+Math.round(s.MEDIUM)+'%  🟢 '+Math.round(s.LOW)+'%',
-  (lc!=='unknown'||n)?'Sensors: '+(lc!=='unknown'?'light '+Math.round(sens.light)+'% ('+lc+')':'')+(lc!=='unknown'&&n?', ':'')+(n?'RGB '+sens.readings.filter(x=>x.plastic).length+'/'+n+' plastic-like':''):null,
+  (lc!=='unknown'||n)?'Sensors: '+(lc!=='unknown'?'light '+Math.round(sens.light)+'% ('+lc+')':'')+(lc!=='unknown'&&n?', ':'')+(n?'RGB '+okReads().filter(x=>x.plastic).length+'/'+n+' plastic-like':'')+(gpsFresh()?', GPS '+(sens.gps.sats||'?')+' satellites':''):null,
   'Confidence: '+res.conf+'%',
   hasLoc()?'Location: '+$('lat').value+', '+$('lon').value:'Location: not set',
   hasLoc()?'Map: '+link():null,
@@ -1410,7 +1445,7 @@ function saveCur(){
  Object.assign(cur,{time:+new Date(shotTime||Date.now()),site:$('site').value.trim(),lat:$('lat').value,lon:$('lon').value,risk:res.lvl,macL:res.macL,micL:res.micL,
   macP:+res.macP.toFixed(2),micP:+res.micP.toFixed(3),uv:!!res.uv,items:res.items,specks:res.specksN||0,area:a===null?'':+a.toFixed(1),
   zR:Math.round(s.HIGH),zO:Math.round(s.MEDIUM),zG:Math.round(s.LOW),conf:res.conf,light:sens.light==null?'':Math.round(sens.light),
-  rgbPlastic:sens.readings.length?sens.readings.filter(x=>x.plastic).length+'/'+sens.readings.length:'',
+  rgbPlastic:okReads().length?okReads().filter(x=>x.plastic).length+'/'+okReads().length:'',
   landR:alt>0?Math.round(GW_PER_M*alt/2):150,notes:$('notes').value.trim(),who:$('who').value.trim(),msg:$('msg').value});
  cur.thumb=thumb();
  const i=hist.findIndex(h=>h.id===cur.id);if(i<0)hist.unshift(cur);else hist[i]=cur;hist=hist.slice(0,60);
