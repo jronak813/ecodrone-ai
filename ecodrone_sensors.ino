@@ -1,7 +1,7 @@
 /*
   EcoDrone AI – RGB colour sensor + light sensor for the web app
   -------------------------------------------------------------
-  Sends one line every half second over USB (115200 baud), for example:
+  Sends one line every half second over USB, for example:
       R:120,G:80,B:60,L:55
   R, G, B = colour of the ground (0–255)   L = light level (0–100 %)
 
@@ -49,7 +49,7 @@ void setup() {
   pinMode(S0, OUTPUT); pinMode(S1, OUTPUT); pinMode(S2, OUTPUT); pinMode(S3, OUTPUT);
   pinMode(OUT, INPUT);
   digitalWrite(S0, HIGH); digitalWrite(S1, LOW);   // 20% frequency scaling
-  Serial.begin(115200);   // same speed as the EcoDrone app
+  Serial.begin(9600);
 }
 
 void loop() {

@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EcoDrone AI – Plastic Zone Scanner</title>
+<meta name="description" content="Scan land from drone photos or a live camera, see plastic zones, use RGB and light sensors, and send WhatsApp alerts.">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<style>/* Leaflet 1.9.4 map styles (BSD-2) */
+/* required styles */
+
+.leaflet-pane,
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-tile-container,
+.leaflet-pane > svg,
+.leaflet-pane > canvas,
+.leaflet-zoom-box,
+.leaflet-image-layer,
+.leaflet-layer {
+	position: absolute;
+	left: 0;
+	top: 0;
+	}
+.leaflet-container {
+	overflow: hidden;
+	}
+.leaflet-tile,
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+	-webkit-user-select: none;
+	   -moz-user-select: none;
+	        user-select: none;
+	  -webkit-user-drag: none;
+	}
+/* Prevents IE11 from highlighting tiles in blue */
+.leaflet-tile::selection {
+	background: transparent;
+}
+/* Safari renders non-retina tile on retina better with this, but Chrome is worse */
+.leaflet-safari .leaflet-tile {
+	image-rendering: -webkit-optimize-contrast;
+	}
+/* hack that prevents hw layers "stretching" when loading new tiles */
+.leaflet-safari .leaflet-tile-container {
+	width: 1600px;
+	height: 1600px;
+	-webkit-transform-origin: 0 0;
+	}
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+	display: block;
+	}
+/* .leaflet-container svg: reset svg max-width decleration shipped in Joomla! (joomla.org) 3.x */
+/* .leaflet-container img: map is broken in FF if you have max-width: 100% on tiles */
+.leaflet-container .leaflet-overlay-pane svg {
+	max-width: none !important;
+	max-height: none !important;
+	}
+.leaflet-container .leaflet-marker-pane img,
+.leaflet-container .leaflet-shadow-pane img,
+.leaflet-container .leaflet-tile-pane img,
+.leaflet-container img.leaflet-image-layer,
+.leaflet-container .leaflet-tile {
+	max-width: none !important;
+	max-height: none !important;
+	width: auto;
+	padding: 0;
+	}
+
+.leaflet-container img.leaflet-tile {
+	/* See: https://bugs.chromium.org/p/chromium/issues/detail?id=600120 */
+	mix-blend-mode: plus-lighter;
+}
+
+.leaflet-container.leaflet-touch-zoom {
+	-ms-touch-action: pan-x pan-y;
+	touch-action: pan-x pan-y;
+	}
+.leaflet-container.leaflet-touch-drag {
+	-ms-touch-action: pinch-zoom;
+	/* Fallback for FF which doesn't support pinch-zoom */
+	touch-action: none;
+	touch-action: pinch-zoom;
+}
+.leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {
+	-ms-touch-action: none;
+	touch-action: none;
+}
+.leaflet-container {
+	-webkit-tap-highlight-color: transparent;
+}
+.leaflet-container a {
+	-webkit-tap-highlight-color: rgba(51, 181, 229, 0.4);
+}
+.leaflet-tile {
+	filter: inherit;
+	visibility: hidden;
+	}
+.leaflet-tile-loaded {
+	visibility: inherit;
+	}
+.leaflet-zoom-box {
+	width: 0;
+	height: 0;
+	-moz-box-sizing: border-box;
+	     box-sizing: border-box;
+	z-index: 800;
+	}
+/* workaround for https://bugzilla.mozilla.org/show_bug.cgi?id=888319 */
+.leaflet-overlay-pane svg {
+	-moz-user-select: none;
+	}
+
+.leaflet-pane         { z-index: 400; }
+
+.leaflet-tile-pane    { z-index: 200; }
+.leaflet-overlay-pane { z-index: 400; }
+.leaflet-shadow-pane  { z-index: 500; }
+.leaflet-marker-pane  { z-index: 600; }
+.leaflet-tooltip-pane   { z-index: 650; }
+.leaflet-popup-pane   { z-index: 700; }
+
+.leaflet-map-pane canvas { z-index: 100; }
+.leaflet-map-pane svg    { z-index: 200; }
+
+.leaflet-vml-shape {
+	width: 1px;
+	height: 1px;
+	}
+.lvml {
+	behavior: url(#default#VML);
+	display: inline-block;
+	position: absolute;
+	}
+
+
+/* control positioning */
+
+.leaflet-control {
+	position: relative;
+	z-index: 800;
+	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
+	pointer-events: auto;
+	}
+.leaflet-top,
+.leaflet-bottom {
+	position: absolute;
+	z-index: 1000;
+	pointer-events: none;
+	}
+.leaflet-top {
+	top: 0;
+	}
+.leaflet-right {
+	right: 0;
+	}
+.leaflet-bottom {
+	bottom: 0;
+	}
+.leaflet-left {
+	left: 0;
+	}
+.leaflet-control {
+	float: left;
+	clear: both;
+	}
+.leaflet-right .leaflet-control {
+	float: right;
+	}
+.leaflet-top .leaflet-control {
+	margin-top: 10px;
+	}
+.leaflet-bottom .leaflet-control {
+	margin-bottom: 10px;
+	}
+.leaflet-left .leaflet-control {
+	margin-left: 10px;
+	}
+.leaflet-right .leaflet-control {
+	margin-right: 10px;
+	}
+
+
+/* zoom and fade animations */
+
+.leaflet-fade-anim .leaflet-popup {
+	opacity: 0;
+	-webkit-transition: opacity 0.2s linear;
+	   -moz-transition: opacity 0.2s linear;
+	        transition: opacity 0.2s linear;
+	}
+.leaflet-fade-anim .leaflet-map-pane .leaflet-popup {
+	opacity: 1;
+	}
+.leaflet-zoom-animated {
+	-webkit-transform-origin: 0 0;
+	    -ms-transform-origin: 0 0;
+	        transform-origin: 0 0;
+	}
+svg.leaflet-zoom-animated {
+	will-change: transform;
+}
+
+.leaflet-zoom-anim .leaflet-zoom-animated {
+	-webkit-transition: -webkit-transform 0.25s cubic-bezier(0,0,0.25,1);
+	   -moz-transition:    -moz-transform 0.25s cubic-bezier(0,0,0.25,1);
+	        transition:         transform 0.25s cubic-bezier(0,0,0.25,1);
+	}
+.leaflet-zoom-anim .leaflet-tile,
+.leaflet-pan-anim .leaflet-tile {
+	-webkit-transition: none;
+	   -moz-transition: none;
+	        transition: none;
+	}
+
+.leaflet-zoom-anim .leaflet-zoom-hide {
+	visibility: hidden;
+	}
+
+
+/* cursors */
+
+.leaflet-interactive {
+	cursor: pointer;
+	}
+.leaflet-grab {
+	cursor: -webkit-grab;
+	cursor:    -moz-grab;
+	cursor:         grab;
+	}
+.leaflet-crosshair,
+.leaflet-crosshair .leaflet-interactive {
+	cursor: crosshair;
+	}
+.leaflet-popup-pane,
+.leaflet-control {
+	cursor: auto;
+	}
+.leaflet-dragging .leaflet-grab,
+.leaflet-dragging .leaflet-grab .leaflet-interactive,
+.leaflet-dragging .leaflet-marker-draggable {
+	cursor: move;
+	cursor: -webkit-grabbing;
+	cursor:    -moz-grabbing;
+	cursor:         grabbing;
+	}
+
+/* marker & overlays interactivity */
+.leaflet-marker-icon,
+.leaflet-marker-shadow,
+.leaflet-image-layer,
+.leaflet-pane > svg path,
+.leaflet-tile-container {
+	pointer-events: none;
+	}
+
+.leaflet-marker-icon.leaflet-interactive,
+.leaflet-image-layer.leaflet-interactive,
+.leaflet-pane > svg path.leaflet-interactive,
+svg.leaflet-image-layer.leaflet-interactive path {
+	pointer-events: visiblePainted; /* IE 9-10 doesn't have auto */
+	pointer-events: auto;
+	}
+
+/* visual tweaks */
+
+.leaflet-container {
+	background: #ddd;
+	outline-offset: 1px;
+	}
+.leaflet-container a {
+	color: #0078A8;
+	}
+.leaflet-zoom-box {
+	border: 2px dotted #38f;
+	background: rgba(255,255,255,0.5);
+	}
+
+
+/* general typography */
+.leaflet-container {
+	font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	font-size: 0.75rem;
+	line-height: 1.5;
+	}
+
+
+/* general toolbar styles */
+
+.leaflet-bar {
+	box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+	border-radius: 4px;
+	}
+.leaflet-bar a {
+	background-color: #fff;
+	border-bottom: 1px solid #ccc;
+	width: 26px;
+	height: 26px;
+	line-height: 26px;
+	display: block;
+	text-align: center;
+	text-decoration: none;
+	color: black;
+	}
+.leaflet-bar a,
+.leaflet-control-layers-toggle {
+	background-position: 50% 50%;
+	background-repeat: no-repeat;
+	display: block;
+	}
+.leaflet-bar a:hover,
+.leaflet-bar a:focus {
+	background-color: #f4f4f4;
+	}
+.leaflet-bar a:first-child {
+	border-top-left-radius: 4px;
+	border-top-right-radius: 4px;
+	}
+.leaflet-bar a:last-child {
+	border-bottom-left-radius: 4px;
+	border-bottom-right-radius: 4px;
+	border-bottom: none;
+	}
+.leaflet-bar a.leaflet-disabled {
+	cursor: default;
+	background-color: #f4f4f4;
+	color: #bbb;
+	}
+
+.leaflet-touch .leaflet-bar a {
+	width: 30px;
+	height: 30px;
+	line-height: 30px;
+	}
+.leaflet-touch .leaflet-bar a:first-child {
+	border-top-left-radius: 2px;
+	border-top-right-radius: 2px;
+	}
+.leaflet-touch .leaflet-bar a:last-child {
+	border-bottom-left-radius: 2px;
+	border-bottom-right-radius: 2px;
+	}
+
+/* zoom control */
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+	font: bold 18px 'Lucida Console', Monaco, monospace;
+	text-indent: 1px;
+	}
+
+.leaflet-touch .leaflet-control-zoom-in, .leaflet-touch .leaflet-control-zoom-out  {
+	font-size: 22px;
+	}
+
+
+/* layers control */
+
+.leaflet-control-layers {
+	box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+	background: #fff;
+	border-radius: 5px;
+	}
+.leaflet-control-layers-toggle {
+	background-image: url(images/layers.png);
+	width: 36px;
+	height: 36px;
+	}
+.leaflet-retina .leaflet-control-layers-toggle {
+	background-image: url(images/layers-2x.png);
+	background-size: 26px 26px;
+	}
+.leaflet-touch .leaflet-control-layers-toggle {
+	width: 44px;
+	height: 44px;
+	}
+.leaflet-control-layers .leaflet-control-layers-list,
+.leaflet-control-layers-expanded .leaflet-control-layers-toggle {
+	display: none;
+	}
+.leaflet-control-layers-expanded .leaflet-control-layers-list {
+	display: block;
+	position: relative;
+	}
+.leaflet-control-layers-expanded {
+	padding: 6px 10px 6px 6px;
+	color: #333;
+	background: #fff;
+	}
+.leaflet-control-layers-scrollbar {
+	overflow-y: scroll;
+	overflow-x: hidden;
+	padding-right: 5px;
+	}
+.leaflet-control-layers-selector {
+	margin-top: 2px;
+	position: relative;
+	top: 1px;
+	}
+.leaflet-control-layers label {
+	display: block;
+	font-size: 13px;
+	font-size: 1.08333em;
+	}
+.leaflet-control-layers-separator {
+	height: 0;
+	border-top: 1px solid #ddd;
+	margin: 5px -10px 5px -6px;
+	}
+
+/* Default icon URLs */
+.leaflet-default-icon-path { /* used only in path-guessing heuristic, see L.Icon.Default */
+	background-image: url(images/marker-icon.png);
+	}
+
+
+/* attribution and scale controls */
+
+.leaflet-container .leaflet-control-attribution {
+	background: #fff;
+	background: rgba(255, 255, 255, 0.8);
+	margin: 0;
+	}
+.leaflet-control-attribution,
+.leaflet-control-scale-line {
+	padding: 0 5px;
+	color: #333;
+	line-height: 1.4;
+	}
+.leaflet-control-attribution a {
+	text-decoration: none;
+	}
+.leaflet-control-attribution a:hover,
+.leaflet-control-attribution a:focus {
+	text-decoration: underline;
+	}
+.leaflet-attribution-flag {
+	display: inline !important;
+	vertical-align: baseline !important;
+	width: 1em;
+	height: 0.6669em;
+	}
+.leaflet-left .leaflet-control-scale {
+	margin-left: 5px;
+	}
+.leaflet-bottom .leaflet-control-scale {
+	margin-bottom: 5px;
+	}
+.leaflet-control-scale-line {
+	border: 2px solid #777;
+	border-top: none;
+	line-height: 1.1;
+	padding: 2px 5px 1px;
+	white-space: nowrap;
+	-moz-box-sizing: border-box;
+	     box-sizing: border-box;
+	background: rgba(255, 255, 255, 0.8);
+	text-shadow: 1px 1px #fff;
+	}
+.leaflet-control-scale-line:not(:first-child) {
+	border-top: 2px solid #777;
+	border-bottom: none;
+	margin-top: -2px;
+	}
+.leaflet-control-scale-line:not(:first-child):not(:last-child) {
+	border-bottom: 2px solid #777;
+	}
+
+.leaflet-touch .leaflet-control-attribution,
+.leaflet-touch .leaflet-control-layers,
+.leaflet-touch .leaflet-bar {
+	box-shadow: none;
+	}
+.leaflet-touch .leaflet-control-layers,
+.leaflet-touch .leaflet-bar {
+	border: 2px solid rgba(0,0,0,0.2);
+	background-clip: padding-box;
+	}
+
+
+/* popup */
+
+.leaflet-popup {
+	position: absolute;
+	text-align: center;
+	margin-bottom: 20px;
+	}
+.leaflet-popup-content-wrapper {
+	padding: 1px;
+	text-align: left;
+	border-radius: 12px;
+	}
+.leaflet-popup-content {
+	margin: 13px 24px 13px 20px;
+	line-height: 1.3;
+	font-size: 13px;
+	font-size: 1.08333em;
+	min-height: 1px;
+	}
+.leaflet-popup-content p {
+	margin: 17px 0;
+	margin: 1.3em 0;
+	}
+.leaflet-popup-tip-container {
+	width: 40px;
+	height: 20px;
+	position: absolute;
+	left: 50%;
+	margin-top: -1px;
+	margin-left: -20px;
+	overflow: hidden;
+	pointer-events: none;
+	}
+.leaflet-popup-tip {
+	width: 17px;
+	height: 17px;
+	padding: 1px;
+
+	margin: -10px auto 0;
+	pointer-events: auto;
+
+	-webkit-transform: rotate(45deg);
+	   -moz-transform: rotate(45deg);
+	    -ms-transform: rotate(45deg);
+	        transform: rotate(45deg);
+	}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+	background: white;
+	color: #333;
+	box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+	}
+.leaflet-container a.leaflet-popup-close-button {
+	position: absolute;
+	top: 0;
+	right: 0;
+	border: none;
+	text-align: center;
+	width: 24px;
+	height: 24px;
+	font: 16px/24px Tahoma, Verdana, sans-serif;
+	color: #757575;
+	text-decoration: none;
+	background: transparent;
+	}
+.leaflet-container a.leaflet-popup-close-button:hover,
+.leaflet-container a.leaflet-popup-close-button:focus {
+	color: #585858;
+	}
+.leaflet-popup-scrolled {
+	overflow: auto;
+	}
+
+.leaflet-oldie .leaflet-popup-content-wrapper {
+	-ms-zoom: 1;
+	}
+.leaflet-oldie .leaflet-popup-tip {
+	width: 24px;
+	margin: 0 auto;
+
+	-ms-filter: "progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678)";
+	filter: progid:DXImageTransform.Microsoft.Matrix(M11=0.70710678, M12=0.70710678, M21=-0.70710678, M22=0.70710678);
+	}
+
+.leaflet-oldie .leaflet-control-zoom,
+.leaflet-oldie .leaflet-control-layers,
+.leaflet-oldie .leaflet-popup-content-wrapper,
+.leaflet-oldie .leaflet-popup-tip {
+	border: 1px solid #999;
+	}
+
+
+/* div icon */
+
+.leaflet-div-icon {
+	background: #fff;
+	border: 1px solid #666;
+	}
+
+
+/* Tooltip */
+/* Base styles for the element that has a tooltip */
+.leaflet-tooltip {
+	position: absolute;
+	padding: 6px;
+	background-color: #fff;
+	border: 1px solid #fff;
+	border-radius: 3px;
+	color: #222;
+	white-space: nowrap;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	pointer-events: none;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+	}
+.leaflet-tooltip.leaflet-interactive {
+	cursor: pointer;
+	pointer-events: auto;
+	}
+.leaflet-tooltip-top:before,
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+	position: absolute;
+	pointer-events: none;
+	border: 6px solid transparent;
+	background: transparent;
+	content: "";
+	}
+
+/* Directions */
+
+.leaflet-tooltip-bottom {
+	margin-top: 6px;
+}
+.leaflet-tooltip-top {
+	margin-top: -6px;
+}
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-top:before {
+	left: 50%;
+	margin-left: -6px;
+	}
+.leaflet-tooltip-top:before {
+	bottom: 0;
+	margin-bottom: -12px;
+	border-top-color: #fff;
+	}
+.leaflet-tooltip-bottom:before {
+	top: 0;
+	margin-top: -12px;
+	margin-left: -6px;
+	border-bottom-color: #fff;
+	}
+.leaflet-tooltip-left {
+	margin-left: -6px;
+}
+.leaflet-tooltip-right {
+	margin-left: 6px;
+}
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+	top: 50%;
+	margin-top: -6px;
+	}
+.leaflet-tooltip-left:before {
+	right: 0;
+	margin-right: -12px;
+	border-left-color: #fff;
+	}
+.leaflet-tooltip-right:before {
+	left: 0;
+	margin-left: -12px;
+	border-right-color: #fff;
+	}
+
+/* Printing */
+
+@media print {
+	/* Prevent printers from removing background-images of controls. */
+	.leaflet-control {
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+		}
+	}
+</style>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#f3f6f4;--card:#fff;--ink:#12241d;--mut:#5b6e64;--line:#dbe4de;--acc:#0b7a5a;--accb:#e3f3ec;--hi:#e03131;--med:#f08c00;--lo:#2f9e44;--onacc:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1813;--card:#13221b;--ink:#e8f1ea;--mut:#98ada1;--line:#233b30;--acc:#3ccf9a;--accb:#173529;--onacc:#07130d;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Manrope,system-ui,sans-serif}
+.wrap{max-width:900px;margin:auto;padding:0 18px 48px}
+header{padding:30px 0 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.logo{width:52px;height:52px;border-radius:14px;background:var(--acc);display:grid;place-items:center}
+.logo i{width:26px;height:26px;border-radius:50%;border:4px solid var(--onacc);display:block;position:relative}
+.logo i:after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--onacc)}
+h1{margin:0;font-size:clamp(26px,5vw,38px);line-height:1.1;font-weight:800;letter-spacing:-.02em}
+header p{margin:2px 0 0;color:var(--mut)}
+header>div{flex:1;min-width:220px}
+.banner{border-radius:12px;padding:10px 14px;margin-bottom:14px;font-weight:600;font-size:14px;background:#fff4d6;color:#5a3d00;border:1px solid #f0d37a}
+.step{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:14px}
+.sh{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.num{width:34px;height:34px;border-radius:50%;background:var(--accb);color:var(--acc);font-weight:800;display:grid;place-items:center;flex:none}
+.sh h2{margin:0;font-size:19px;flex:1}
+h3{font-size:15px;margin:16px 0 6px}
+.chip{font-size:13px;font-weight:600;padding:3px 12px;border-radius:99px;background:var(--bg);color:var(--mut);white-space:nowrap}
+.chip.ok{background:var(--accb);color:var(--acc)}.chip.warn{background:#fdebd8;color:#8a3a00}
+.drop{display:block;border:2px dashed var(--line);border-radius:14px;padding:22px 16px;text-align:center;color:var(--mut);cursor:pointer}
+.drop.on{border-color:var(--acc);background:var(--accb)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+button{font:inherit;font-weight:700;border:1.5px solid var(--acc);background:var(--acc);color:var(--onacc);padding:10px 16px;border-radius:10px;cursor:pointer}
+button.ghost{background:transparent;color:var(--acc)}button.on{background:var(--accb);color:var(--acc)}
+button.big{width:100%;padding:14px;font-size:17px}button.sm{padding:6px 10px;font-size:14px}
+button.danger{border-color:var(--hi);color:var(--hi);background:transparent}
+button:focus-visible,input:focus-visible,textarea:focus-visible,.drop:focus-within{outline:3px solid var(--med);outline-offset:2px}
+input[type=text],input[type=number],input[type=tel],textarea{font:inherit;width:100%;padding:10px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+textarea{min-height:220px;resize:vertical;font-size:14px}
+label{font-size:13px;font-weight:600;color:var(--mut);display:block;margin-bottom:4px}
+.field{margin-top:12px}
+canvas{width:100%;height:auto;display:block;border-radius:12px;background:#000;margin-top:12px}
+video{display:none}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-items:end}
+.g3{display:grid;grid-template-columns:90px 1fr 1fr;gap:8px}
+@media (max-width:520px){.g3{grid-template-columns:80px 1fr}.g3 .nm{grid-column:1/-1}.g4{grid-template-columns:repeat(2,1fr)}}
+small,.note{color:var(--mut);font-size:13px}
+a{color:var(--acc);font-weight:700}
+details{margin-top:12px;color:var(--mut)}summary{cursor:pointer;font-weight:600}
+/* result card */
+.zbig{font-size:24px;font-weight:800;padding:14px;border-radius:14px;color:#fff;text-align:center;background:var(--mut)}
+.zbig small{display:block;color:inherit;opacity:.9;font-size:14px;font-weight:600}
+.zbig.HIGH{background:var(--hi)}.zbig.MEDIUM{background:var(--med);color:#1c1400}.zbig.LOW{background:var(--lo)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
+.fact{background:var(--bg);border-radius:12px;padding:12px}
+.fact span{font-size:13px;color:var(--mut);font-weight:600;display:block}
+.fact b{display:block;font-size:26px;line-height:1.2;font-weight:800}
+.fact em{font-style:normal;font-size:13px;color:var(--mut)}
+.risk{display:inline-block;padding:2px 12px;border-radius:99px;font-weight:800;font-size:14px;color:#fff;background:var(--mut)}
+.risk.HIGH{background:var(--hi)}.risk.MEDIUM{background:var(--med);color:#1c1400}.risk.LOW{background:var(--lo)}
+.split{display:flex;height:22px;border-radius:99px;overflow:hidden;margin-top:8px;background:var(--bg)}
+.split i{display:block;height:100%;transition:width .6s}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:13px;font-weight:600}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px;margin-right:5px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.how{background:var(--bg);border-radius:12px;padding:12px 14px;margin-top:12px;font-size:14px}
+.how ol{margin:6px 0 0;padding-left:20px}.how li{margin:3px 0}
+.conf{height:10px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:6px}.conf i{display:block;height:100%;background:var(--acc);width:0;transition:width .6s}
+/* sensors */
+.sens{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+@media (max-width:520px){.sens{grid-template-columns:1fr}}
+.sbox{background:var(--bg);border-radius:12px;padding:12px}
+.sbox b{font-size:22px;display:block}
+.swatch{width:46px;height:46px;border-radius:10px;border:2px solid var(--line);float:right}
+.lbar{height:12px;border-radius:99px;background:linear-gradient(90deg,#1b1b2f,#7a6a2a,#ffe066);margin-top:8px;position:relative}
+.lbar i{position:absolute;top:-4px;width:4px;height:20px;background:var(--ink);border-radius:2px;left:0;transition:left .4s}
+.pill{display:inline-block;font-size:12px;font-weight:700;padding:1px 9px;border-radius:99px;background:var(--accb);color:var(--acc)}
+.pill.bad{background:#fde2e2;color:#a51111}.pill.mid{background:#fff0d6;color:#8a5300}
+/* map + lists */
+#map{height:420px;border-radius:12px;margin-top:12px;border:1px solid var(--line);z-index:0}
+.leaflet-popup-content{font:14px/1.5 Manrope,system-ui,sans-serif}
+.list{display:grid;gap:8px;margin-top:10px}
+.item{display:flex;gap:10px;align-items:center;background:var(--bg);border-radius:10px;padding:8px 10px}
+.item .grow{flex:1;min-width:0}.item .t{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item img{width:56px;height:40px;object-fit:cover;border-radius:6px;flex:none;background:#000}
+.item input[type=checkbox]{width:20px;height:20px;flex:none}
+.tag{font-size:12px;font-weight:700;padding:1px 8px;border-radius:99px}.tag.sent{background:var(--accb);color:var(--acc)}.tag.pend{background:#fdebd8;color:#8a3a00}
+.empty{color:var(--mut);font-size:14px;padding:6px 0}
+.livebar{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-weight:700}
+</style>
+<meta name="theme-color" content="#0b7a5a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+</head>
+<body>
+<div class="wrap">
+<header>
+<div class="logo" aria-hidden="true"><i></i></div>
+<div><h1>EcoDrone AI</h1><p>Scan land from a drone, find plastic, mark Red / Orange / Green zones on the map, and alert the right people.</p></div>
+<button id="inst" class="ghost" hidden>Install this app</button>
+</header>
+<div id="offNote" class="banner" hidden>You are offline. Scans still work and are saved in History. The map and alerts need internet.</div>
+<div id="frameNote" class="banner" hidden>Preview mode: live camera, device location, map background, phone Share and Arduino USB are switched off here for safety. Photo upload, scanning, zones, sensor simulation and alerts all work. Open the app from its own website link for every feature.</div>
+
+<!-- 1. INPUT -->
+<section class="step">
+<div class="sh"><span class="num">1</span><h2>Scan the land</h2><span id="c1" class="chip" aria-live="polite">Waiting</span></div>
+<div class="row" style="margin-top:0">
+<button onclick="liveStart()">🎥 Live scan with camera</button>
+<button class="ghost" onclick="$('cam').click()">📷 Take photo</button>
+<button class="ghost" onclick="demo()">Try a demo land</button>
+</div>
+<label class="drop" id="drop" for="file" style="margin-top:12px">Or drop / choose a drone photo here<br><small>Use the original file from the drone so its GPS, time and flight height are kept.</small><input id="file" type="file" accept="image/*" hidden></label>
+<input id="cam" type="file" accept="image/*" capture="environment" hidden>
+<input id="uvf" type="file" accept="image/*" hidden>
+<div class="row"><button class="ghost sm" onclick="$('uvf').click()">+ Add UV photo (more accurate microplastic)</button><small id="uvNote"></small></div>
+
+<div id="liveBox" hidden>
+<canvas id="lcv" width="640" height="400"></canvas>
+<div class="livebar"><span id="lZone" class="risk">–</span><span id="lStat" class="note">Point the camera at the ground…</span></div>
+<div class="row"><button onclick="liveSave()">📸 Save this scan</button><button class="ghost" onclick="liveStop()">Stop camera</button></div>
+<small>Live scan checks the camera view twice a second and colours each part of the land. Save the scan to get the full report.</small>
+</div>
+<video id="vid" playsinline muted autoplay></video>
+</section>
+
+<!-- 2. SENSORS -->
+<section class="step">
+<div class="sh"><span class="num">2</span><h2>Sensors: RGB colour + light</h2><span id="c2" class="chip">Not connected</span></div>
+<small>The RGB sensor checks the real colour of the ground; the light sensor checks how bright it is. Both change how the scan works and how sure the result is.</small>
+<div class="sens">
+<div class="sbox"><i class="swatch" id="sw"></i><span class="note" style="font-weight:600">RGB colour sensor</span><b id="sRGB">–</b><span id="sRGBt" class="pill">no reading</span><br><small id="sRGBn">Readings: 0</small></div>
+<div class="sbox"><span class="note" style="font-weight:600">Light sensor</span><b id="sL">–</b><span id="sLt" class="pill">no reading</span><div class="lbar"><i id="lbi"></i></div></div>
+</div>
+<div class="row">
+<button class="ghost" onclick="serialConnect()">🔌 Connect Arduino (USB)</button>
+<button class="ghost" onclick="simSensors()">Simulate sensors</button>
+<button class="ghost sm" onclick="resetSensors()">Reset</button>
+</div>
+<details><summary>Type readings by hand</summary>
+<div class="g4 field">
+<div><label for="iR">Red (0–255)</label><input id="iR" type="number" min="0" max="255"></div>
+<div><label for="iG">Green (0–255)</label><input id="iG" type="number" min="0" max="255"></div>
+<div><label for="iB">Blue (0–255)</label><input id="iB" type="number" min="0" max="255"></div>
+<div><label for="iL">Light (0–100%)</label><input id="iL" type="number" min="0" max="100"></div>
+</div>
+<div class="row"><button class="ghost sm" onclick="manualAdd()">Add reading</button><small>Take readings at different spots on the land: more spots = better result.</small></div>
+</details>
+<small id="serNote">Arduino sends one line per reading, e.g. <b>R:120,G:80,B:60,L:55</b> at 9600 baud. USB connection works in Chrome or Edge on a computer.</small>
+</section>
+
+<!-- 3. RESULT -->
+<section class="step">
+<div class="sh"><span class="num">3</span><h2>Scan result</h2><span id="c3" class="chip" aria-live="polite">Waiting</span></div>
+<div id="empty" class="note">Results appear here after a scan.</div>
+<div id="out" hidden>
+<div id="zoneBig" class="zbig">–</div>
+<div class="facts">
+<div class="fact"><span>Macroplastic (big pieces)</span><b id="fMac">–</b><em id="fMacE"></em><br><span id="zMac" class="risk">–</span></div>
+<div class="fact"><span>Microplastic (tiny bits)</span><b id="fMic">–</b><em id="fMicE"></em><br><span id="zMic" class="risk">–</span></div>
+<div class="fact"><span>Plastic area (approx.)</span><b id="fArea">–</b><em id="fAreaE"></em></div>
+<div class="fact"><span>Confidence</span><b id="fConf">–</b><div class="conf"><i id="confB"></i></div></div>
+</div>
+<h3>How much of the land is in each zone</h3>
+<div class="split"><i id="spR" style="background:var(--hi)"></i><i id="spO" style="background:var(--med)"></i><i id="spG" style="background:var(--lo)"></i></div>
+<div class="legend"><span><i class="dot" style="background:var(--hi)"></i>Red <b id="pR">–</b></span><span><i class="dot" style="background:var(--med)"></i>Orange <b id="pO">–</b></span><span><i class="dot" style="background:var(--lo)"></i>Green <b id="pG">–</b></span></div>
+<div class="tabs">
+<button class="on sm" id="v0" onclick="setView(0)">Zone map on land</button>
+<button class="ghost sm" id="v1" onclick="setView(1)">Plastic found</button>
+<button class="ghost sm" id="v2" onclick="setView(2)">UV view</button>
+<button class="ghost sm" id="v3" onclick="setView(3)">Original</button>
+<button class="ghost sm" onclick="replay()">▶ Replay scan</button>
+<button class="ghost sm" onclick="downloadImg()">Save image</button>
+</div>
+<canvas id="cv" width="900" height="560"></canvas>
+<p class="note" id="vNote"></p>
+<div class="how"><b>How this result was worked out</b><ol id="howList"></ol></div>
+</div>
+</section>
+
+<!-- 4. PLACE -->
+<section class="step">
+<div class="sh"><span class="num">4</span><h2>Where the drone took the photo</h2><span id="c4" class="chip" aria-live="polite">Waiting</span></div>
+<div class="g2"><div><label for="lat">Latitude</label><input id="lat" type="number" step="any" inputmode="decimal"></div><div><label for="lon">Longitude</label><input id="lon" type="number" step="any" inputmode="decimal"></div></div>
+<div class="row"><button class="ghost" onclick="getPos().then(buildMsg)">Use this device’s location</button><a id="maps" target="_blank" rel="noopener" href="#">Open in Google Maps</a></div>
+<small id="locNote">The location is read from the photo’s GPS tags. If there are none, the device location is used.</small>
+<div class="field"><label for="site">Site name</label><input id="site" type="text" placeholder="e.g. Fateh Sagar Lake, north bank"></div>
+<div class="g2 field">
+<div><label for="alt">Drone flight height (metres)</label><input id="alt" type="number" min="1" step="any" inputmode="decimal" placeholder="e.g. 30"></div>
+<div><label for="who">Reported by</label><input id="who" type="text" autocomplete="name" placeholder="Your name or team"></div>
+</div>
+<small id="altNote">Flight height gives the real size of the land in the photo. It is filled in from DJI drone photos automatically.</small>
+<div class="field"><label for="notes">Notes for the clean-up team (optional)</label><input id="notes" type="text" placeholder="e.g. Access from the boat jetty, mostly bottles and bags"></div>
+</section>
+
+<!-- 5. MAP -->
+<section class="step">
+<div class="sh"><span class="num">5</span><h2>Plastic zone map</h2><span id="c5" class="chip">0 places</span></div>
+<small>Each dot is a place the drone scanned. The colour shows how much plastic was found there. Tap a dot for details.</small>
+<div class="row"><button class="ghost sm" onclick="goTo('udaipur')">Udaipur</button><button class="ghost sm" onclick="goTo('raj')">All Rajasthan</button><button class="ghost sm" onclick="goTo('all')">All my scans</button></div>
+<div class="row"><span class="note" style="font-weight:600">Colour by:</span><button class="on sm" id="mAll" onclick="setMode('all')">Overall</button><button class="ghost sm" id="mMac" onclick="setMode('mac')">Macroplastic</button><button class="ghost sm" id="mMic" onclick="setMode('mic')">Microplastic</button></div>
+<div id="map"></div>
+<div class="legend"><span><i class="dot" style="background:var(--hi)"></i>Red zone – High</span><span><i class="dot" style="background:var(--med)"></i>Orange zone – Medium</span><span><i class="dot" style="background:var(--lo)"></i>Green zone – Low</span></div>
+<small id="mapNote"></small>
+</section>
+
+<!-- 6. ALERT -->
+<section class="step">
+<div class="sh"><span class="num">6</span><h2>Send the alert</h2><span id="c6" class="chip" aria-live="polite">Waiting</span></div>
+<label>Who gets the alert</label>
+<div id="contacts" class="list"></div>
+<div class="g3 field">
+<div><label for="cc">Code</label><input id="cc" type="tel" inputmode="numeric" value="91" aria-label="Country code"></div>
+<div><label for="ph">WhatsApp number</label><input id="ph" type="tel" inputmode="numeric" autocomplete="tel" placeholder="9876543210"></div>
+<div class="nm"><label for="cn">Name (e.g. Ward officer)</label><input id="cn" type="text" placeholder="Contact name"></div>
+</div>
+<div class="row"><button class="ghost sm" onclick="addContact()">+ Save contact</button><small id="cNote"></small></div>
+<div class="field"><label for="msg">Message (you can edit it)</label><textarea id="msg" placeholder="The alert message is prepared after the scan."></textarea></div>
+<div class="row"><button class="big" onclick="sharePhoto()">Share zone image + report</button></div>
+<div class="row"><button class="ghost" onclick="sendAll()">Send text on WhatsApp</button><button class="ghost" onclick="copyMsg()">Copy message</button></div>
+<small id="sendNote">“Share” opens your phone’s share menu: pick WhatsApp and the chat. On a computer, the zone image is saved and WhatsApp opens with the text so you can attach it.</small>
+<details><summary>Advanced: Python YOLOv8 server</summary>
+<div class="row"><label style="margin:0"><input type="checkbox" id="useSrv"> Use the server for detection</label></div>
+<div class="row"><label style="margin:0"><input type="checkbox" id="srvSend"> Let the server send the WhatsApp alert by itself</label></div>
+<label for="srv" style="margin-top:8px">Server address</label><input id="srv" type="text" value="http://localhost:8000">
+<small>Works when this page is opened from a downloaded file on the computer running <b>app.py</b>.</small></details>
+</section>
+
+<!-- 7. HISTORY -->
+<section class="step">
+<div class="sh"><span class="num">7</span><h2>History</h2><span id="c7" class="chip">0 scans</span></div>
+<small>Every scan is saved on this device. Reports not yet sent are marked so nothing is missed.</small>
+<div id="hist" class="list"></div>
+<div class="row"><button class="ghost sm" onclick="exportCSV()">Download as spreadsheet (CSV)</button><button class="danger sm" onclick="clearHist(this)">Clear history</button></div>
+</section>
+
+<p class="note">How to read the results: the app looks for plastic-like colours (blue, white, red, yellow) and shapes. Big connected patches count as macroplastic; tiny separate specks count as microplastic. A drone photo cannot see plastic smaller than a few millimetres, so “microplastic” here is a screening estimate; a UV photo and the sensors make it more reliable. Flowers, foam or sunlight on water can look like plastic, so always confirm on site.</p>
+</div>
+
+<script>
+/* ================================================================
+   EcoDrone AI  –  how the code is organised
+   1. helpers + saved settings      5. sensors (RGB + light)
+   2. reading the photo (GPS, time) 6. location, map
+   3. DETECTION (finding plastic)   7. alert message + sharing
+   4. zones + drawing + animation   8. history
+   ================================================================ */
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d'),base=document.createElement('canvas');
+let res=null,view=0,curBlob=null,uvBlob=null,uvP=null,cur=null,msgEdited=false,shotTime=null,srvSent=false,anim=0;
+const GW_PER_M=1.43; /* ground width ≈ 1.43 × flight height for a typical drone camera (~71° view) */
+if(window.top!==window)$('frameNote').hidden=false;
+/* save a file: uses the Claude page download permission when available, otherwise a normal download */
+let dl=null;try{window.claude&&claude.use&&claude.use('downloads').then(d=>{dl=d}).catch(()=>{})}catch(e){}
+async function saveFile(blob,name){
+ if(dl){try{await dl.save({filename:name,data:blob});return true}catch(e){if(e&&e.code==='declined')return false}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);return true;
+}
+/* open WhatsApp / Google Maps in a new tab */
+function openLink(u){const a=document.createElement('a');a.href=u;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove()}
+/* ask "are you sure?" by tapping twice (pop-up dialogs are blocked in some places) */
+function sure(btn,label){if(btn.dataset.sure){return true}const old=btn.textContent;btn.dataset.sure=1;btn.textContent=label||'Tap again';setTimeout(()=>{delete btn.dataset.sure;btn.textContent=old},3000);return false}
+const chip=(id,t,k)=>{const e=$(id);e.textContent=t;e.className='chip'+(k===1?' ok':k===2?' warn':'')};
+const store={get(k,d){try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}};
+const net=()=>{$('offNote').hidden=navigator.onLine};addEventListener('online',net);addEventListener('offline',net);net();
+['who','alt','cc'].forEach(k=>{const v=store.get('eco_'+k,null);if(v!==null&&v!=='')$(k).value=v;$(k).addEventListener('input',()=>store.set('eco_'+k,$(k).value))});
+
+/* ---------- ZONE RULES (change these numbers to tune the app) ---------- */
+const ZONE={HIGH:{name:'Red',emoji:'🔴',word:'High plastic',col:'#e03131',act:'Clean-up needed soon'},
+            MEDIUM:{name:'Orange',emoji:'🟠',word:'Medium plastic',col:'#f08c00',act:'Clean-up advised'},
+            LOW:{name:'Green',emoji:'🟢',word:'Low plastic',col:'#2f9e44',act:'Keep monitoring'}};
+const macLevel=(p,items)=>p>=5||items>=15?'HIGH':p>=1||items>=5?'MEDIUM':'LOW';   /* macro: % of photo or number of pieces */
+const micLevel=p=>p>=0.4?'HIGH':p>=0.1?'MEDIUM':'LOW';                              /* micro: % of photo covered by tiny specks */
+const cellLevel=p=>p>=5?'HIGH':p>=1?'MEDIUM':'LOW';                                  /* one square of the land grid */
+const worst=(a,b)=>{const o=['LOW','MEDIUM','HIGH'];return o[Math.max(o.indexOf(a),o.indexOf(b))]};
+
+/* ================= 5. SENSORS (defined early because detection uses them) ================= */
+let sens={r:null,g:null,b:null,light:null,readings:[],src:''};
+function rgbHsv(r,g,b){const mx=Math.max(r,g,b),mn=Math.min(r,g,b),v=mx/255,s=mx?(mx-mn)/mx:0;let h=0;if(mx!==mn){const k=mx-mn;h=mx===r?((g-b)/k+6)%6:mx===g?(b-r)/k+2:(r-g)/k+4;h*=60}return{h,s,v}}
+/* what does a colour look like? used for both camera pixels and the RGB sensor */
+function colourClass(r,g,b,th){
+ const{h,s,v}=rgbHsv(r,g,b);
+ if(v>th.whiteV&&s<.14)return'white';
+ if(s>th.satMin&&v>th.vMin){if(h>=180&&h<=270)return'blue';if(h>=320||h<=12)return'red';if(h>=48&&h<=65)return'yellow'}
+ return null;
+}
+function naturalName(r,g,b){const{h,s,v}=rgbHsv(r,g,b);if(v<.18)return'dark soil / shadow';if(h>=70&&h<=170&&s>.2)return'plants';if(h>=15&&h<=50)return'soil / sand';if(h>170&&h<200)return'water';return'natural ground'}
+/* light sensor → light condition → detection thresholds */
+function lightCond(){const L=sens.light;if(L==null)return'unknown';return L<20?'low':L>85?'glare':'good'}
+function thresholds(){const c=lightCond();return{whiteV:c==='glare'?.93:c==='low'?.75:.85,satMin:c==='low'?.45:.55,vMin:c==='low'?.35:.45}}
+function sensorPlasticShare(){const n=sens.readings.length;if(!n)return null;return sens.readings.filter(x=>x.plastic).length/n}
+function addReading(r,g,b,L,src){
+ r=clamp(r,0,255);g=clamp(g,0,255);b=clamp(b,0,255);
+ const t=thresholds(),cls=colourClass(r,g,b,t);
+ sens.r=r;sens.g=g;sens.b=b;if(L!=null&&isFinite(L))sens.light=clamp(L,0,100);sens.src=src;
+ sens.readings.push({r,g,b,plastic:!!cls,cls});if(sens.readings.length>200)sens.readings.shift();
+ drawSensors();rescanSoon();
+}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,+v));
+function drawSensors(){
+ const has=sens.r!=null;
+ if(has){$('sw').style.background='rgb('+sens.r+','+sens.g+','+sens.b+')';$('sRGB').textContent=sens.r+', '+sens.g+', '+sens.b;
+  const last=sens.readings[sens.readings.length-1],sh=sensorPlasticShare();
+  $('sRGBt').textContent=last.plastic?'Looks like '+last.cls+' plastic':'Looks like '+naturalName(sens.r,sens.g,sens.b);$('sRGBt').className='pill'+(last.plastic?' bad':'');
+  $('sRGBn').textContent='Readings: '+sens.readings.length+' · plastic-like: '+sens.readings.filter(x=>x.plastic).length+' ('+Math.round(sh*100)+'%)'}
+ if(sens.light!=null){const c=lightCond();$('sL').textContent=Math.round(sens.light)+'%';
+  $('sLt').textContent=c==='low'?'Low light – scan is less sure':c==='glare'?'Very bright – sun glare filtered':'Good light';$('sLt').className='pill'+(c==='good'?'':' mid');
+  $('lbi').style.left='calc('+sens.light+'% - 2px)'}
+ if(has||sens.light!=null)chip('c2',sens.src==='serial'?'Arduino connected':sens.src==='sim'?'Simulated':'Manual readings',1);
+}
+function resetSensors(){sens={r:null,g:null,b:null,light:null,readings:[],src:''};$('sw').style.background='';['sRGB','sL'].forEach(i=>$(i).textContent='–');$('sRGBt').textContent=$('sLt').textContent='no reading';$('sRGBt').className=$('sLt').className='pill';$('sRGBn').textContent='Readings: 0';$('lbi').style.left='0';chip('c2','Not connected');rescanSoon()}
+function manualAdd(){const r=$('iR').value,g=$('iG').value,b=$('iB').value,L=$('iL').value;
+ if(r===''||g===''||b===''){if(L!==''){sens.light=clamp(L,0,100);sens.src='manual';drawSensors();rescanSoon()}return}
+ addReading(+r,+g,+b,L===''?null:+L,'manual')}
+/* simulate: readings taken over a land with some plastic */
+let simT=null;
+function simSensors(){
+ clearInterval(simT);let n=0;const L=55+Math.random()*20;
+ const sample=[[150,110,70],[120,90,60],[90,120,60],[30,90,200],[160,120,80],[240,240,235],[110,85,55],[200,30,40],[140,105,65],[95,130,70],[130,95,60],[230,200,30]];
+ simT=setInterval(()=>{const s=sample[n%sample.length],j=()=>Math.round((Math.random()-.5)*16);addReading(s[0]+j(),s[1]+j(),s[2]+j(),L+(Math.random()-.5)*6,'sim');if(++n>=12)clearInterval(simT)},250);
+}
+/* Arduino over USB (Web Serial) – lines like R:120,G:80,B:60,L:55 */
+async function serialConnect(){
+ if(!('serial' in navigator)){$('serNote').textContent='USB connection needs Chrome or Edge on a computer. On a phone, type the readings by hand or use Simulate.';return}
+ try{const port=await navigator.serial.requestPort();await port.open({baudRate:9600});chip('c2','Arduino connected',1);
+  const dec=new TextDecoderStream();port.readable.pipeTo(dec.writable);const rd=dec.readable.getReader();let buf='';
+  while(true){const{value,done}=await rd.read();if(done)break;buf+=value;let i;
+   while((i=buf.indexOf('\n'))>=0){const line=buf.slice(0,i).trim();buf=buf.slice(i+1);parseLine(line)}}
+ }catch(e){chip('c2','Not connected',2);$('serNote').textContent='Could not connect: '+(e.message||e)}
+}
+function parseLine(line){
+ const g=k=>{const m=line.match(new RegExp(k+'\\s*[:=]\\s*(-?[\\d.]+)','i'));return m?+m[1]:null};
+ const r=g('R'),gg=g('G'),b=g('B'),L=g('L');
+ if(r!=null&&gg!=null&&b!=null)addReading(r,gg,b,L,'serial');else if(L!=null){sens.light=clamp(L,0,100);sens.src='serial';drawSensors()}
+}
+let rsT=null;function rescanSoon(){clearTimeout(rsT);rsT=setTimeout(()=>{if(res&&base.width&&!res.server){analyze(false);buildMsg()}},400)}
+
+/* ================= 2. READING THE PHOTO: GPS, time, drone height ================= */
+function parseExif(v,t){
+ const le=v.getUint16(t)===0x4949,u16=a=>v.getUint16(a,le),u32=a=>v.getUint32(a,le);
+ const ifd=a=>{const n=u16(a),r={};for(let i=0;i<n;i++){const e=a+2+i*12;r[u16(e)]={cnt:u32(e+4),off:e+8}}return r};
+ const out={};const i0=ifd(t+u32(t+4));
+ if(i0[0x8769]){try{const ex=ifd(t+u32(i0[0x8769].off)),e=ex[0x9003]||ex[0x9004];if(e){const a=t+u32(e.off);let s='';for(let i=0;i<19;i++)s+=String.fromCharCode(v.getUint8(a+i));
+  const m=s.match(/^(\d{4}):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/);if(m)out.time=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5],+m[6])}}catch(e){}}
+ if(i0[0x8825]){try{const g=ifd(t+u32(i0[0x8825].off));if(g[2]&&g[4]){
+  const rat=e=>{const a=t+u32(e.off),r=[];for(let i=0;i<e.cnt;i++)r.push(u32(a+i*8)/u32(a+i*8+4));return r};
+  const ch=e=>String.fromCharCode(v.getUint8(e.off)),dg=r=>r[0]+r[1]/60+r[2]/3600;
+  let lat=dg(rat(g[2])),lon=dg(rat(g[4]));if(g[1]&&ch(g[1])==='S')lat=-lat;if(g[3]&&ch(g[3])==='W')lon=-lon;
+  if(isFinite(lat)&&isFinite(lon)&&!(lat===0&&lon===0))out.gps={lat,lon}}}catch(e){}}
+ return out;
+}
+function readMeta(buf){
+ const out={};
+ try{const v=new DataView(buf);if(v.getUint16(0)===0xFFD8){let o=2;
+  while(o<v.byteLength-10){const m=v.getUint16(o),l=v.getUint16(o+2);
+   if(m===0xFFE1&&v.getUint32(o+4)===0x45786966){Object.assign(out,parseExif(v,o+10));break}
+   if((m&0xFF00)!==0xFF00)break;o+=2+l}}}catch(e){}
+ try{const txt=new TextDecoder('latin1').decode(new Uint8Array(buf,0,Math.min(buf.byteLength,262144)));
+  const m=txt.match(/RelativeAltitude="?\s*\+?(-?[\d.]+)/);if(m&&+m[1]>0)out.alt=+m[1]}catch(e){}
+ return out;
+}
+const imgFrom=b=>new Promise((ok,no)=>{const im=new Image();im.onload=()=>ok(im);im.onerror=no;im.src=URL.createObjectURL(b)});
+async function loadFile(f){
+ if(!f)return;curBlob=f;chip('c1','Reading photo…');
+ let buf,meta,im;
+ try{buf=await f.arrayBuffer();meta=readMeta(buf);im=await imgFrom(new Blob([buf],{type:f.type}))}
+ catch(e){chip('c1','Cannot open',2);$('uvNote').textContent='This photo format could not be opened. On iPhone set Camera › Formats › Most Compatible, or export as JPEG.';return}
+ await run(im,im.width,im.height,meta);
+}
+async function run(src,w,h,meta){
+ meta=meta||{};chip('c1','Photo loaded',1);chip('c3','Scanning…');chip('c4','Waiting');chip('c6','Waiting');
+ msgEdited=false;shotTime=meta.time||new Date();
+ if(meta.alt){$('alt').value=Math.round(meta.alt*10)/10;$('altNote').textContent='Flight height read from the drone photo: '+$('alt').value+' m.'}
+ const s=Math.min(1,900/w);base.width=cv.width=Math.round(w*s);base.height=cv.height=Math.round(h*s);
+ base.getContext('2d').drawImage(src,0,0,base.width,base.height);
+ $('empty').hidden=true;$('out').hidden=false;
+ cur={id:Date.now(),sent:false};
+ await analyze(true);
+ await locate(meta.gps,meta.demo);
+ buildMsg();focusCur();
+ chip('c6',contacts.length?'Ready to send':'Add a contact',contacts.length?1:2);
+ if(srvSent){srvSent=false;markSent();chip('c6','Sent by server',1)}
+ $('out').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+/* ================= 3. DETECTION: finding plastic in the picture =================
+   Step A: give every pixel a colour class (blue / white / red / yellow plastic, or nothing)
+   Step B: join touching plastic pixels into "blobs"
+   Step C: big blob = macroplastic piece, tiny blob = microplastic speck
+   Step D: cut the land into a grid and colour each square Red / Orange / Green */
+function detect(data,W,H,step,th){
+ const w=Math.floor(W/step),h=Math.floor(H/step),N=w*h,mask=new Uint8Array(N),cc={blue:0,white:0,red:0,yellow:0};
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=((y*step)*W+x*step)*4,t=colourClass(data[i],data[i+1],data[i+2],th);if(t){mask[y*w+x]=1;cc[t]++}}
+ const type=new Uint8Array(N),seen=new Uint8Array(N),boxes=[],specks=[],stack=new Int32Array(N),comp=[];
+ const microMax=Math.max(3,Math.round(N*0.0004)),minN=step===1?2:1;   /* blobs smaller than 0.04% of the picture are "micro" */
+ let macPx=0,micPx=0;
+ for(let p=0;p<N;p++){if(!mask[p]||seen[p])continue;
+  let sp=0;stack[sp++]=p;seen[p]=1;comp.length=0;let x0=w,y0=h,x1=0,y1=0;
+  while(sp){const q=stack[--sp],qx=q%w,qy=(q/w)|0;comp.push(q);
+   if(qx<x0)x0=qx;if(qx>x1)x1=qx;if(qy<y0)y0=qy;if(qy>y1)y1=qy;
+   if(qx>0&&mask[q-1]&&!seen[q-1]){seen[q-1]=1;stack[sp++]=q-1}
+   if(qx<w-1&&mask[q+1]&&!seen[q+1]){seen[q+1]=1;stack[sp++]=q+1}
+   if(qy>0&&mask[q-w]&&!seen[q-w]){seen[q-w]=1;stack[sp++]=q-w}
+   if(qy<h-1&&mask[q+w]&&!seen[q+w]){seen[q+w]=1;stack[sp++]=q+w}}
+  const n=comp.length;
+  if(n>microMax){macPx+=n;comp.forEach(q=>type[q]=1);boxes.push({x:x0*step,y:y0*step,w:(x1-x0+1)*step,h:(y1-y0+1)*step})}
+  else if(n>=minN){micPx+=n;comp.forEach(q=>type[q]=2);specks.push({x:(x0+x1+1)/2*step,y:(y0+y1+1)/2*step})}
+ }
+ const top=Object.entries(cc).sort((a,b)=>b[1]-a[1])[0];
+ return{w,h,step,type,boxes,specks,items:boxes.length,specksN:specks.length,macP:macPx/N*100,micP:micPx/N*100,color:top[1]?top[0]:'none'};
+}
+function makeGrid(r,cols){
+ const rows=Math.max(3,Math.round(cols*r.h/r.w)),cells=[],cnt={HIGH:0,MEDIUM:0,LOW:0};
+ for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
+  const xa=Math.floor(gx*r.w/cols),xb=Math.floor((gx+1)*r.w/cols),ya=Math.floor(gy*r.h/rows),yb=Math.floor((gy+1)*r.h/rows);let n=0;
+  for(let y=ya;y<yb;y++)for(let x=xa;x<xb;x++)if(r.type[y*r.w+x])n++;
+  const p=n/Math.max(1,(xb-xa)*(yb-ya))*100,l=cellLevel(p);cnt[l]++;
+  cells.push({x:xa*r.step,y:ya*r.step,w:(xb-xa)*r.step,h:(yb-ya)*r.step,p,l,gy});
+ }
+ const T=cols*rows;return{cells,cols,rows,share:{HIGH:cnt.HIGH/T*100,MEDIUM:cnt.MEDIUM/T*100,LOW:cnt.LOW/T*100}};
+}
+async function analyze(animate){
+ if($('useSrv').checked&&await srvAnalyze())return;
+ const W=base.width,H=base.height,d=base.getContext('2d').getImageData(0,0,W,H).data;
+ const r=detect(d,W,H,1,thresholds());
+ r.grid=makeGrid(r,12);
+ if(uvP!==null){r.micP=uvP;r.uv=true}
+ finish(r,animate);
+}
+function finish(r,animate){
+ r.macL=macLevel(r.macP,r.items);r.micL=micLevel(r.micP);
+ /* sensor effect on microplastic: many plastic-like RGB readings raise the micro zone */
+ const sh=sensorPlasticShare();r.sensorShare=sh;r.sensorBoost=false;
+ if(sh!=null&&sens.readings.length>=5){const sl=sh>=.4?'HIGH':sh>=.15?'MEDIUM':'LOW';if(worst(sl,r.micL)!==r.micL){r.micL=worst(sl,r.micL);r.sensorBoost=true}}
+ r.lvl=worst(r.macL,r.micL);r.conf=confidence(r);
+ res=r;showNumbers();
+ if(animate)playScan();else render();
+}
+function confidence(r){
+ const why=[];let c=72;
+ const lc=lightCond();
+ if(lc==='good'){c+=10;why.push('+10 good light (light sensor)')}else if(lc==='low'){c-=10;why.push('−10 low light (light sensor)')}else if(lc==='glare'){c-=4;why.push('−4 bright glare (light sensor)')}else why.push('no light sensor reading');
+ const n=sens.readings.length;
+ if(n>=5){const agree=(r.sensorShare>=.15)===(r.lvl!=='LOW');c+=agree?10:-5;why.push((agree?'+10 RGB sensor agrees':'−5 RGB sensor disagrees')+' ('+n+' readings)')}else if(n)why.push('+0 only '+n+' RGB reading(s), need 5+');else why.push('no RGB sensor readings');
+ if(r.uv){c+=6;why.push('+6 UV photo used for microplastic')}
+ if(parseFloat($('alt').value)>0){c+=3;why.push('+3 flight height known (real size)')}
+ r.confWhy=why;return Math.max(35,Math.min(97,c));
+}
+
+/* ================= 4. SHOWING THE RESULT ================= */
+function areaM2(){if(!res)return null;const a=parseFloat($('alt').value);if(!(a>0))return null;const gw=GW_PER_M*a,gh=gw*base.height/base.width;return res.macP/100*gw*gh}
+const fmtA=a=>a<10?a.toFixed(1):Math.round(a).toLocaleString();
+function showNumbers(){
+ const r=res,Z=ZONE[r.lvl];
+ $('zoneBig').innerHTML=Z.emoji+' '+Z.name.toUpperCase()+' ZONE – '+Z.word+'<small>'+Z.act+'</small>';$('zoneBig').className='zbig '+r.lvl;
+ $('fMac').textContent=r.macP.toFixed(1)+'%';$('fMacE').textContent=r.items+' piece'+(r.items===1?'':'s')+' found';
+ $('fMic').textContent=r.micP.toFixed(2)+'%';$('fMicE').textContent=r.uv?'from UV photo glow':(r.specksN||0)+' tiny specks counted';
+ [['zMac',r.macL],['zMic',r.micL]].forEach(([id,l])=>{$(id).textContent=ZONE[l].emoji+' '+ZONE[l].name;$(id).className='risk '+l});
+ showArea();
+ $('fConf').textContent=r.conf+'%';$('confB').style.width=r.conf+'%';
+ const s=r.grid.share;$('spR').style.width=s.HIGH+'%';$('spO').style.width=s.MEDIUM+'%';$('spG').style.width=s.LOW+'%';
+ $('pR').textContent=Math.round(s.HIGH)+'%';$('pO').textContent=Math.round(s.MEDIUM)+'%';$('pG').textContent=Math.round(s.LOW)+'%';
+ const lc=lightCond(),sh=r.sensorShare;
+ const how=[
+  'The photo was checked pixel by pixel for plastic colours (blue, white, red, yellow)'+(lc!=='unknown'?' – the colour limits were adjusted for '+(lc==='good'?'good':lc==='low'?'low':'very bright')+' light from the light sensor':'')+'.',
+  'Touching plastic pixels were joined into blobs: '+r.items+' big pieces (macroplastic) and '+(r.specksN||0)+' tiny specks (microplastic).',
+  'Macroplastic covers '+r.macP.toFixed(1)+'% of the photo → '+ZONE[r.macL].name+' (Red from 5% or 15 pieces, Orange from 1% or 5 pieces).',
+  'Microplastic covers '+r.micP.toFixed(2)+'% '+(r.uv?'(from the UV photo) ':'')+'→ '+ZONE[r.micL].name+' (Red from 0.4%, Orange from 0.1%)'+(r.sensorBoost?' – raised because '+Math.round(sh*100)+'% of RGB sensor readings were plastic-coloured':'')+'.',
+  'The land was cut into '+r.grid.cols+' × '+r.grid.rows+' squares and each square was coloured by how much plastic is inside it.',
+  'Overall zone = the worse of the macro and micro zones → '+ZONE[r.lvl].name+'. Confidence '+r.conf+'%: '+r.confWhy.join(', ')+'.'];
+ $('howList').innerHTML='';how.forEach(t=>{const li=document.createElement('li');li.textContent=t;$('howList').appendChild(li)});
+ chip('c3','Done',1);
+}
+function showArea(){const a=areaM2();$('fArea').textContent=a===null?'–':fmtA(a)+' m²';$('fAreaE').textContent=a===null?'add flight height in step 4':'of plastic, of about '+fmtA(GW_PER_M*parseFloat($('alt').value)*GW_PER_M*parseFloat($('alt').value)*base.height/base.width)+' m² land'}
+const VNOTE=['Each square of land is coloured by how much plastic it has: Red = a lot, Orange = some, Green = little.','Red boxes = big plastic pieces (macro). Cyan circles = tiny specks (micro).','UV-style view: plastic glows green-yellow, like plastic under a UV torch.','The original photo.'];
+function setView(v){view=v;for(let i=0;i<4;i++)$('v'+i).className='sm '+(i===v?'on':'ghost');cancelAnimationFrame(anim);render()}
+function drawGrid(c,r,upto){
+ const fs=Math.max(12,Math.round(c.canvas.width/40));c.save();c.lineWidth=1;c.font='bold '+fs+'px Manrope,sans-serif';c.textAlign='center';c.textBaseline='middle';
+ r.grid.cells.forEach(k=>{if(upto!=null&&k.y>upto)return;const col=ZONE[k.l].col;
+  c.fillStyle=col+(k.l==='LOW'?'38':'70');c.fillRect(k.x,k.y,k.w,k.h);c.strokeStyle='rgba(255,255,255,.45)';c.strokeRect(k.x+.5,k.y+.5,k.w-1,k.h-1);
+  if(k.p>=1&&k.w>fs*2.6){c.fillStyle='#fff';c.shadowColor='#000';c.shadowBlur=3;c.fillText(k.p.toFixed(k.p<10?1:0)+'%',k.x+k.w/2,k.y+k.h/2);c.shadowBlur=0}});
+ c.restore();
+}
+function drawFound(c,r){
+ c.save();c.lineWidth=2.5;c.strokeStyle='#ff2d2d';c.font='bold 13px Manrope,sans-serif';
+ r.boxes.forEach((b,i)=>{c.strokeRect(b.x-2,b.y-2,b.w+4,b.h+4);c.fillStyle='#ff2d2d';c.fillText('#'+(i+1),b.x,Math.max(12,b.y-5))});
+ c.strokeStyle='#18e0ff';c.lineWidth=1.5;r.specks.slice(0,1500).forEach(p=>{c.beginPath();c.arc(p.x,p.y,4,0,7);c.stroke()});c.restore();
+}
+function drawUV(c,r){
+ c.save();c.fillStyle='rgba(25,8,70,.66)';c.fillRect(0,0,cv.width,cv.height);c.fillStyle='#b7ff3c';c.shadowColor='#b7ff3c';c.shadowBlur=8;
+ const{w,h,step,type}=r;for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(type[y*w+x])c.fillRect(x*step,y*step,step,step);c.restore();
+}
+function render(){
+ if(!base.width)return;ctx.drawImage(base,0,0);$('vNote').textContent=VNOTE[view];if(!res)return;
+ if(view===0)drawGrid(ctx,res);else if(view===1)drawFound(ctx,res);else if(view===2)drawUV(ctx,res);
+}
+/* scanning animation: a laser line sweeps over the land and colours each row as it passes */
+function playScan(){
+ cancelAnimationFrame(anim);const H=cv.height,T=2200,t0=performance.now();chip('c3','Scanning…');
+ const frame=now=>{const k=Math.min(1,(now-t0)/T),y=k*H;
+  ctx.drawImage(base,0,0);ctx.fillStyle='rgba(0,20,10,.35)';ctx.fillRect(0,y,cv.width,H-y);
+  drawGrid(ctx,res,y-1);
+  const g=ctx.createLinearGradient(0,y-40,0,y+4);g.addColorStop(0,'rgba(60,255,170,0)');g.addColorStop(1,'rgba(60,255,170,.55)');ctx.fillStyle=g;ctx.fillRect(0,y-40,cv.width,44);
+  ctx.fillStyle='#3cffaa';ctx.fillRect(0,y-2,cv.width,3);
+  const fs=Math.max(15,Math.round(cv.width/32));ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(10,10,fs*13,fs*2);ctx.fillStyle='#3cffaa';ctx.font='bold '+fs+'px Manrope,sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText('SCANNING LAND… '+Math.round(k*100)+'%',10+fs*.6,10+fs);
+  if(k<1)anim=requestAnimationFrame(frame);else{setView(0);chip('c3','Done',1)}};
+ anim=requestAnimationFrame(frame);
+}
+function replay(){if(res)playScan()}
+/* image used for sharing: zone view + a summary strip */
+function reportCanvas(){
+ const c=document.createElement('canvas'),fh=Math.max(54,Math.round(cv.width*.075));c.width=base.width;c.height=base.height+fh;
+ const x=c.getContext('2d');x.drawImage(base,0,0);drawGrid(x,res);
+ x.fillStyle=ZONE[res.lvl].col;x.fillRect(0,base.height,c.width,fh);x.fillStyle='#fff';x.font='bold '+Math.round(fh*.32)+'px Manrope,sans-serif';x.textBaseline='middle';
+ const t=['EcoDrone AI',ZONE[res.lvl].name.toUpperCase()+' ZONE','Macro '+res.macP.toFixed(1)+'%','Micro '+res.micP.toFixed(2)+'%',$('site').value.trim(),hasLoc()?$('lat').value+', '+$('lon').value:'',fmtTime(shotTime)].filter(Boolean).join('  ·  ');
+ x.fillText(t,12,base.height+fh/2,c.width-24);return c;
+}
+const toBlob=c=>new Promise(r=>c.toBlob(r,'image/jpeg',.88));
+const fname=()=>'ecodrone-'+($('site').value.trim().replace(/[^\w-]+/g,'-').slice(0,30)||'scan')+'-'+new Date(shotTime||Date.now()).toISOString().slice(0,10)+'.jpg';
+async function downloadImg(){if(!res)return;await saveFile(await toBlob(reportCanvas()),fname())}
+
+/* ---------- UV photo ---------- */
+$('uvf').addEventListener('change',async e=>{
+ const f=e.target.files[0];if(!f)return;uvBlob=f;const im=await imgFrom(f),c=document.createElement('canvas');
+ c.width=Math.min(400,im.width);c.height=Math.round(im.height*c.width/im.width);const x=c.getContext('2d');x.drawImage(im,0,0,c.width,c.height);
+ const d=x.getImageData(0,0,c.width,c.height).data;let n=0;for(let i=0;i<d.length;i+=4)if(d[i+2]>200||d[i+1]>220)n++;
+ uvP=n/(c.width*c.height)*100;$('uvNote').textContent='UV photo added: '+uvP.toFixed(2)+'% of it glows.';
+ if(res&&base.width){analyze(false);buildMsg()}e.target.value='';
+});
+
+/* ---------- inputs ---------- */
+$('file').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value=''});
+$('cam').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value=''});
+const dz=$('drop');['dragenter','dragover'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.add('on')}));
+['dragleave','drop'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.remove('on')}));
+dz.addEventListener('drop',e=>loadFile(e.dataTransfer.files[0]));
+
+/* ---------- LIVE SCAN: camera view is checked twice a second and zones are drawn on it ---------- */
+let stream=null,liveTimer=null,liveRaf=0,liveRes=null;const lcv=$('lcv'),lctx=lcv.getContext('2d'),lsrc=document.createElement('canvas');
+async function liveStart(){
+ try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920}},audio:false});}
+ catch(e){chip('c1','Camera blocked',2);$('uvNote').textContent='The camera is blocked. Allow camera access, or use “Take photo”.';return}
+ const v=$('vid');v.srcObject=stream;await v.play().catch(()=>{});$('liveBox').hidden=false;chip('c1','Live scanning',1);
+ liveTimer=setInterval(liveDetect,500);const t0=performance.now();
+ const loop=now=>{if(!stream)return;if(v.videoWidth){
+   if(lcv.width!==640){lcv.width=640}lcv.height=Math.round(640*v.videoHeight/v.videoWidth);
+   lctx.drawImage(v,0,0,lcv.width,lcv.height);
+   if(liveRes){const sx=lcv.width/lsrc.width;lctx.save();lctx.scale(sx,sx);drawGrid(lctx,liveRes);lctx.restore()}
+   const y=((now-t0)%1600)/1600*lcv.height;lctx.fillStyle='#3cffaa';lctx.fillRect(0,y,lcv.width,2);
+   lctx.fillStyle='rgba(0,0,0,.55)';lctx.fillRect(8,8,128,24);lctx.fillStyle='#3cffaa';lctx.font='bold 13px Manrope,sans-serif';lctx.textBaseline='middle';lctx.fillText('● LIVE SCAN',16,20)}
+  liveRaf=requestAnimationFrame(loop)};
+ liveRaf=requestAnimationFrame(loop);
+}
+function liveDetect(){
+ const v=$('vid');if(!v.videoWidth)return;lsrc.width=480;lsrc.height=Math.round(480*v.videoHeight/v.videoWidth);
+ const x=lsrc.getContext('2d',{willReadFrequently:true});x.drawImage(v,0,0,lsrc.width,lsrc.height);
+ const r=detect(x.getImageData(0,0,lsrc.width,lsrc.height).data,lsrc.width,lsrc.height,2,thresholds());r.grid=makeGrid(r,8);
+ const l=worst(macLevel(r.macP,r.items),micLevel(r.micP));liveRes=r;
+ $('lZone').textContent=ZONE[l].emoji+' '+ZONE[l].name;$('lZone').className='risk '+l;
+ $('lStat').textContent='Macro '+r.macP.toFixed(1)+'% · '+r.items+' pieces · micro '+r.micP.toFixed(2)+'% · Red squares '+Math.round(r.grid.share.HIGH)+'%';
+}
+async function liveSave(){
+ const v=$('vid');if(!v.videoWidth)return;const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);
+ curBlob=await toBlob(c);liveStop();await run(c,c.width,c.height,null);
+}
+function liveStop(){clearInterval(liveTimer);cancelAnimationFrame(liveRaf);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;liveRes=null;$('liveBox').hidden=true;if(!res)chip('c1','Waiting')}
+
+/* ---------- DEMO LAND: soil, grass, a pond, a dumping corner, scattered litter, a clean area ---------- */
+function demo(){
+ const W=900,H=560,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');
+ let seed=(Date.now()%100000)+7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+ const gr=x.createLinearGradient(0,0,W,H);gr.addColorStop(0,'#7a5a38');gr.addColorStop(1,'#5a4329');x.fillStyle=gr;x.fillRect(0,0,W,H);
+ for(let i=0;i<3500;i++){x.fillStyle='rgba('+(80+rnd()*60|0)+','+(58+rnd()*40|0)+','+(30+rnd()*20|0)+',.5)';x.fillRect(rnd()*W,rnd()*H,2+rnd()*5,2+rnd()*5)}
+ for(let i=0;i<18;i++){x.fillStyle='rgba('+(50+rnd()*30|0)+','+(100+rnd()*40|0)+',40,.6)';x.beginPath();x.ellipse(450+rnd()*450,rnd()*H,30+rnd()*60,15+rnd()*35,rnd()*3,0,7);x.fill()}
+ x.fillStyle='#3f5f55';x.beginPath();x.ellipse(720,420,120,70,.2,0,7);x.fill();
+ const cols=['#1f6feb','#f4f4f0','#e0262b','#f2c200'];
+ const piece=(cx,cy,sp,n,big)=>{for(let i=0;i<n;i++){x.save();x.translate(cx+(rnd()-.5)*sp,cy+(rnd()-.5)*sp*.7);x.rotate(rnd()*3);x.fillStyle=cols[(rnd()*4)|0];x.fillRect(0,0,big[0]+rnd()*big[1],big[0]*.55+rnd()*big[1]*.6);x.restore()}};
+ const specks=(cx,cy,sp,n)=>{for(let i=0;i<n;i++){x.fillStyle=cols[(rnd()*4)|0];x.fillRect(cx+(rnd()-.5)*sp,cy+(rnd()-.5)*sp*.7,2+(rnd()*2|0),2+(rnd()*2|0))}};
+ /* each demo click gives a different kind of land: heavy (Red), medium (Orange), clean (Green) */
+ const kind=hist.length%3;
+ if(kind===0){piece(200,170,280,26,[24,44]);specks(200,170,340,420);piece(470,360,300,8,[18,26]);specks(470,360,380,160)}   /* dumping ground → red */
+ else if(kind===1){piece(170,150,230,9,[20,34]);specks(170,150,300,220);piece(420,330,320,3,[16,22]);specks(420,330,380,90)} /* some litter → orange */
+ else{piece(250,200,200,1,[14,10]);specks(300,250,500,25)}                                                                    /* almost clean → green */
+ c.toBlob(b=>{curBlob=b},'image/jpeg',.9);
+ if(!$('site').value||$('site').value.startsWith('Demo'))$('site').value='Demo land '+(hist.length+1);
+ run(c,W,H,{gps:{lat:24.58+(Math.random()-.5)*.06,lon:73.70+(Math.random()-.5)*.08},demo:1,alt:30});
+}
+
+/* ---------- optional Python server ---------- */
+async function srvAnalyze(){
+ if(!curBlob)return false;
+ try{const fd=new FormData();fd.append('file',curBlob,'drone.jpg');if(uvBlob)fd.append('uv_file',uvBlob);fd.append('lat',$('lat').value);fd.append('lon',$('lon').value);
+  const on=contacts.filter(c=>c.on);if($('srvSend').checked&&on.length){fd.append('send_alert','true');fd.append('phone',on[0].num)}
+  const r=await fetch($('srv').value.replace(/\/$/,'')+'/analyze',{method:'POST',body:fd});if(!r.ok)throw 0;const j=await r.json();
+  if(j.gps){$('lat').value=j.gps.lat.toFixed(5);$('lon').value=j.gps.lon.toFixed(5)}
+  const im=await new Promise(ok=>{const i=new Image();i.onload=()=>ok(i);i.src='data:image/jpeg;base64,'+j.annotated_jpg_b64});
+  const s=Math.min(1,900/im.width);base.width=cv.width=Math.round(im.width*s);base.height=cv.height=Math.round(im.height*s);base.getContext('2d').drawImage(im,0,0,base.width,base.height);
+  /* build a mask from the server boxes so the zone grid still works */
+  const w=base.width,h=base.height,type=new Uint8Array(w*h),k=s;const boxes=(j.boxes||[]).map(b=>{const bx=b.box||b.xyxy||[b.x1,b.y1,b.x2,b.y2];return{x:bx[0]*k,y:bx[1]*k,w:(bx[2]-bx[0])*k,h:(bx[3]-bx[1])*k}}).filter(b=>isFinite(b.x));
+  boxes.forEach(b=>{for(let y=Math.max(0,b.y|0);y<Math.min(h,b.y+b.h);y++)for(let x=Math.max(0,b.x|0);x<Math.min(w,b.x+b.w);x++)type[y*w+x]=1});
+  srvSent=!!j.whatsapp_sid;
+  const r2={server:true,w,h,step:1,type,boxes,specks:[],specksN:0,items:j.items,macP:j.macro_pct,micP:uvBlob?j.uv_cover*100:0,uv:!!uvBlob};r2.grid=makeGrid(r2,12);finish(r2,true);return true;
+ }catch(e){$('vNote').textContent='The server could not be reached, so the built-in scan was used.';return false}
+}
+
+/* ================= 6. LOCATION + MAP ================= */
+const hasLoc=()=>$('lat').value!==''&&$('lon').value!=='';
+const link=()=>'https://www.google.com/maps?q='+$('lat').value+','+$('lon').value;
+async function locate(g,isDemo){
+ if(g){$('lat').value=g.lat.toFixed(5);$('lon').value=g.lon.toFixed(5);$('locNote').textContent=isDemo?'Demo location near Udaipur.':'Location read from the photo’s GPS tags (where the drone was).';chip('c4','Found',1);return}
+ $('locNote').textContent='This photo has no GPS tags. Asking the device for its location…';
+ const p=await getPos();if(!p){$('locNote').textContent='Location is blocked or switched off. Type the latitude and longitude by hand.';chip('c4','Needs input',2)}
+ else $('locNote').textContent='This photo had no GPS tags, so this device’s location is used. Check it matches where the drone flew.';
+}
+function getPos(){return new Promise(ok=>{
+ if(!navigator.geolocation)return ok(null);
+ navigator.geolocation.getCurrentPosition(p=>{$('lat').value=p.coords.latitude.toFixed(5);$('lon').value=p.coords.longitude.toFixed(5);$('locNote').textContent='Location taken from this device’s GPS.';chip('c4','Found',1);ok(p)},
+  ()=>ok(null),{enableHighAccuracy:true,timeout:10000,maximumAge:60000})})}
+let map=null,layer=null,mode='all';
+const PLACES={udaipur:{c:[24.5854,73.7125],z:12},raj:{c:[26.6,73.8],z:6}};
+function initMap(){
+ if(map)return true;
+ if(!window.L){$('mapNote').textContent='The map could not load (no internet). Open the page again when online.';return false}
+ map=L.map('map').setView(PLACES.udaipur.c,PLACES.udaipur.z);
+ let tErr=0;L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).on('tileerror',()=>{if(++tErr===3)$('mapNote').textContent+='  (Map background cannot load in this preview – the coloured dots are still in the right places.)'}).addTo(map);
+ layer=L.layerGroup().addTo(map);return true;
+}
+const levelsOf=h=>{const mac=h.macL||macLevel(h.macP,h.items),mic=h.micL||micLevel(h.micP);return{mac,mic,all:h.risk||worst(mac,mic)}};
+const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function drawMap(){
+ if(!initMap())return;layer.clearLayers();
+ const pts=hist.filter(h=>h.lat!==''&&h.lon!==''&&isFinite(+h.lat)&&isFinite(+h.lon));
+ $('c5').textContent=pts.length+' place'+(pts.length===1?'':'s');const n={HIGH:0,MEDIUM:0,LOW:0};
+ pts.slice().reverse().forEach(h=>{const L3=levelsOf(h),z=L3[mode];n[z]++;
+  L.circle([+h.lat,+h.lon],{radius:h.landR||150,color:ZONE[z].col,weight:1,fillColor:ZONE[z].col,fillOpacity:.25}).addTo(layer);
+  L.circleMarker([+h.lat,+h.lon],{radius:9,color:'#fff',weight:2,fillColor:ZONE[z].col,fillOpacity:1}).addTo(layer)
+   .bindPopup('<b>'+esc(h.site||'Unnamed site')+'</b><br>'+ZONE[z].emoji+' <b>'+ZONE[z].name+' zone</b><br>'+
+    'Macroplastic: '+h.macP+'% ('+h.items+' pieces) '+ZONE[L3.mac].emoji+'<br>Microplastic: '+h.micP+'% '+ZONE[L3.mic].emoji+'<br>'+
+    (h.zR!=null?'Land: 🔴 '+h.zR+'% 🟠 '+h.zO+'% 🟢 '+h.zG+'%<br>':'')+(h.conf?'Confidence: '+h.conf+'%<br>':'')+
+    esc(fmtTime(h.time))+(h.who?'<br>By: '+esc(h.who):'')+'<br><a target="_blank" rel="noopener" href="https://www.google.com/maps?q='+h.lat+','+h.lon+'">Google Maps</a>');
+ });
+ $('mapNote').textContent=pts.length?'🔴 '+n.HIGH+' Red   🟠 '+n.MEDIUM+' Orange   🟢 '+n.LOW+' Green':'No places yet. Scan a photo and its location will appear here.';
+}
+function goTo(w){
+ if(!initMap())return;
+ if(w==='all'){const pts=hist.filter(h=>h.lat!==''&&h.lon!=='').map(h=>[+h.lat,+h.lon]);if(pts.length){map.fitBounds(pts,{padding:[30,30],maxZoom:15});return}w='udaipur'}
+ map.setView(PLACES[w].c,PLACES[w].z);
+}
+function setMode(m){mode=m;['all','mac','mic'].forEach(k=>$('m'+k[0].toUpperCase()+k.slice(1)).className='sm '+(k===m?'on':'ghost'));drawMap()}
+function focusCur(){if(cur&&hasLoc()&&initMap())map.setView([+$('lat').value,+$('lon').value],14)}
+
+/* ================= 7. ALERT MESSAGE ================= */
+const fmtTime=d=>d?new Date(d).toLocaleString(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+function buildMsg(){
+ $('maps').href=hasLoc()?link():'#';showArea();if(!res)return;
+ const a=areaM2(),site=$('site').value.trim(),notes=$('notes').value.trim(),who=$('who').value.trim(),Z=ZONE[res.lvl],s=res.grid.share,lc=lightCond(),n=sens.readings.length;
+ if(!msgEdited)$('msg').value=[
+  '🚨 EcoDrone AI – Plastic alert',
+  site?'Site: '+site:null,
+  'Zone: '+Z.emoji+' '+Z.name.toUpperCase()+' ('+Z.word+') – '+Z.act,
+  'Macroplastic: '+res.macP.toFixed(1)+'% of land, '+res.items+' pieces '+ZONE[res.macL].emoji+(a!==null?' (about '+fmtA(a)+' m²)':''),
+  'Microplastic: '+res.micP.toFixed(2)+'% '+(res.uv?'(UV photo)':'('+(res.specksN||0)+' specks)')+' '+ZONE[res.micL].emoji,
+  'Land split: 🔴 '+Math.round(s.HIGH)+'%  🟠 '+Math.round(s.MEDIUM)+'%  🟢 '+Math.round(s.LOW)+'%',
+  (lc!=='unknown'||n)?'Sensors: '+(lc!=='unknown'?'light '+Math.round(sens.light)+'% ('+lc+')':'')+(lc!=='unknown'&&n?', ':'')+(n?'RGB '+sens.readings.filter(x=>x.plastic).length+'/'+n+' plastic-like':''):null,
+  'Confidence: '+res.conf+'%',
+  hasLoc()?'Location: '+$('lat').value+', '+$('lon').value:'Location: not set',
+  hasLoc()?'Map: '+link():null,
+  'Photo taken: '+fmtTime(shotTime),
+  notes?'Notes: '+notes:null,
+  who?'Reported by: '+who:null,
+  '','Automatic screening – please confirm on site.'
+ ].filter(v=>v!==null).join('\n');
+ saveCur();
+}
+$('msg').addEventListener('input',()=>{msgEdited=true;saveCur()});
+['lat','lon','site','notes','who'].forEach(i=>$(i).addEventListener('input',buildMsg));
+$('alt').addEventListener('input',()=>{if(res){res.conf=confidence(res);showNumbers()}buildMsg()});
+$('lat').addEventListener('input',()=>{if(hasLoc())chip('c4','Set',1)});
+
+/* contacts */
+let contacts=store.get('eco_contacts',[]);
+{const old=(()=>{try{return localStorage.getItem('ecoph')}catch(e){return null}})();if(old&&!contacts.length){const d=old.replace(/\D/g,'');if(d.length>=10){contacts.push({name:'Saved number',num:d,on:true});store.set('eco_contacts',contacts)}}}
+function drawContacts(){
+ const box=$('contacts');box.innerHTML='';
+ if(!contacts.length){box.innerHTML='<div class="empty">No contacts yet. Add the person or group who should act on the alert (e.g. municipal ward officer, NGO, school eco-club).</div>';return}
+ contacts.forEach((c,i)=>{const d=document.createElement('div');d.className='item';
+  d.innerHTML='<input type="checkbox" '+(c.on?'checked':'')+' aria-label="Send to this contact"><div class="grow"><div class="t"></div><small></small></div><button class="ghost sm">Send</button><button class="danger sm" aria-label="Remove contact">✕</button>';
+  d.querySelector('.t').textContent=c.name||'Contact';d.querySelector('small').textContent='+'+c.num;
+  const cb=d.querySelector('input'),[bs,bx]=d.getElementsByTagName('button');
+  cb.onchange=()=>{c.on=cb.checked;store.set('eco_contacts',contacts)};bs.onclick=()=>sendTo(c.num);
+  bx.onclick=()=>{if(sure(bx,'Remove?')){contacts.splice(i,1);store.set('eco_contacts',contacts);drawContacts()}};
+  box.appendChild(d)});
+}
+function addContact(){
+ const cc=$('cc').value.replace(/\D/g,'');let n=$('ph').value.replace(/\D/g,'').replace(/^0+/,'');
+ if(cc&&n.startsWith(cc)&&n.length>10)n=n.slice(cc.length);
+ if(n.length<6){$('cNote').textContent='Type the number without the country code.';$('ph').focus();return}
+ const full=cc+n;if(contacts.some(c=>c.num===full)){$('cNote').textContent='That number is already saved.';return}
+ contacts.push({name:$('cn').value.trim(),num:full,on:true});store.set('eco_contacts',contacts);
+ $('ph').value='';$('cn').value='';$('cNote').textContent='Saved.';drawContacts();if(res)chip('c6','Ready to send',1);
+}
+drawContacts();
+function ready(){
+ if(!res){chip('c6','Scan first',2);return false}
+ if(!hasLoc()){chip('c6','Add the location',2);chip('c4','Needs input',2);$('lat').focus();return false}
+ return true;
+}
+function sendTo(num){if(!ready())return;openLink('https://wa.me/'+num+'?text='+encodeURIComponent($('msg').value));markSent();chip('c6','WhatsApp opened',1)}
+function sendAll(){
+ if(!ready())return;const on=contacts.filter(c=>c.on);
+ if(!on.length){if(contacts.length){chip('c6','Tick a contact',2);return}
+  openLink('https://wa.me/?text='+encodeURIComponent($('msg').value));markSent();chip('c6','WhatsApp opened',1);return}
+ if(on.length>1)$('sendNote').textContent='Opening WhatsApp for '+(on[0].name||'the first contact')+'. Use “Send” beside each other contact to send to them too.';
+ sendTo(on[0].num);
+}
+async function sharePhoto(){
+ if(!ready())return;const text=$('msg').value;
+ try{const b=await toBlob(reportCanvas()),f=new File([b],fname(),{type:'image/jpeg'});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],text,title:'EcoDrone AI alert'});markSent();chip('c6','Shared',1);return}
+  await fallbackShare(b);
+ }catch(e){if(e&&e.name==='AbortError'){chip('c6','Share cancelled');return}try{await fallbackShare(await toBlob(reportCanvas()))}catch(_){chip('c6','Could not share',2)}}
+}
+async function fallbackShare(b){
+ const ok=await saveFile(b,fname());
+ $('sendNote').textContent=ok?'The zone image was saved. Attach it in the WhatsApp chat that opens.':'WhatsApp opens with the text. Use “Save image” in step 3 to attach the picture.';sendAll();
+}
+function copyMsg(){navigator.clipboard.writeText($('msg').value).then(()=>chip('c6','Copied',1),()=>{$('msg').select();chip('c6','Select and copy',2)})}
+
+/* ================= 8. HISTORY ================= */
+let hist=store.get('eco_hist',[]);
+function thumb(){const c=document.createElement('canvas');c.width=160;c.height=Math.round(160*base.height/base.width)||100;const x=c.getContext('2d');x.scale(160/base.width,160/base.width);x.drawImage(base,0,0);drawGrid(x,res);try{return c.toDataURL('image/jpeg',.6)}catch(e){return''}}
+function saveCur(){
+ if(!cur||!res)return;const a=areaM2(),alt=parseFloat($('alt').value),s=res.grid.share;
+ Object.assign(cur,{time:+new Date(shotTime||Date.now()),site:$('site').value.trim(),lat:$('lat').value,lon:$('lon').value,risk:res.lvl,macL:res.macL,micL:res.micL,
+  macP:+res.macP.toFixed(2),micP:+res.micP.toFixed(3),uv:!!res.uv,items:res.items,specks:res.specksN||0,area:a===null?'':+a.toFixed(1),
+  zR:Math.round(s.HIGH),zO:Math.round(s.MEDIUM),zG:Math.round(s.LOW),conf:res.conf,light:sens.light==null?'':Math.round(sens.light),
+  rgbPlastic:sens.readings.length?sens.readings.filter(x=>x.plastic).length+'/'+sens.readings.length:'',
+  landR:alt>0?Math.round(GW_PER_M*alt/2):150,notes:$('notes').value.trim(),who:$('who').value.trim(),msg:$('msg').value});
+ cur.thumb=thumb();
+ const i=hist.findIndex(h=>h.id===cur.id);if(i<0)hist.unshift(cur);else hist[i]=cur;hist=hist.slice(0,60);
+ if(!store.set('eco_hist',hist)){hist.forEach(h=>delete h.thumb);store.set('eco_hist',hist)}
+ drawHist();
+}
+function markSent(){if(cur){cur.sent=true;cur.sentAt=Date.now();saveCur()}}
+function drawHist(){
+ drawMap();
+ const box=$('hist');box.innerHTML='';const pend=hist.filter(h=>!h.sent).length;
+ $('c7').textContent=hist.length+' scan'+(hist.length===1?'':'s')+(pend?' · '+pend+' not sent':'');$('c7').className='chip'+(pend?' warn':hist.length?' ok':'');
+ if(!hist.length){box.innerHTML='<div class="empty">No scans yet.</div>';return}
+ hist.forEach(h=>{const d=document.createElement('div');d.className='item';
+  d.innerHTML=(h.thumb?'<img alt="">':'')+'<div class="grow"><div class="t"></div><small></small></div><span class="tag"></span><button class="ghost sm">Resend</button><button class="danger sm" aria-label="Delete scan">✕</button>';
+  if(h.thumb)d.querySelector('img').src=h.thumb;
+  const z=ZONE[h.risk]||ZONE.LOW;d.querySelector('.t').textContent=z.emoji+' '+(h.site||'Unnamed site');
+  d.querySelector('small').textContent=fmtTime(h.time)+' · macro '+h.macP+'% · micro '+h.micP+'%';
+  const tg=d.querySelector('.tag');tg.textContent=h.sent?'Sent':'Not sent';tg.className='tag '+(h.sent?'sent':'pend');
+  const [br,bx]=d.getElementsByTagName('button');
+  br.onclick=()=>{const on=contacts.filter(c=>c.on);openLink('https://wa.me/'+(on[0]?on[0].num:'')+'?text='+encodeURIComponent(h.msg||''));h.sent=true;store.set('eco_hist',hist);drawHist()};
+  bx.onclick=()=>{if(sure(bx,'Delete?')){hist=hist.filter(x=>x.id!==h.id);if(cur&&cur.id===h.id)cur=null;store.set('eco_hist',hist);drawHist()}};
+  box.appendChild(d)});
+}
+function exportCSV(){
+ if(!hist.length)return;
+ const cols=['time','site','lat','lon','risk','macP','micP','items','specks','area','zR','zO','zG','conf','light','rgbPlastic','uv','notes','who','sent'],
+  head=['Photo time','Site','Latitude','Longitude','Zone','Macroplastic %','Microplastic %','Pieces','Specks','Plastic area m2','Red land %','Orange land %','Green land %','Confidence %','Light %','RGB plastic-like','UV used','Notes','Reported by','Sent'];
+ const q=v=>{v=v===undefined||v===null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+ const rows=hist.map(h=>cols.map(c=>q(c==='time'?new Date(h.time).toISOString():c==='risk'?(ZONE[h.risk]||{}).name:c==='sent'||c==='uv'?(h[c]?'yes':'no'):h[c])).join(','));
+ const b=new Blob(['﻿'+head.join(',')+'\n'+rows.join('\n')],{type:'text/csv'});
+ saveFile(b,'ecodrone-history-'+new Date().toISOString().slice(0,10)+'.csv');
+}
+function clearHist(btn){if(hist.length&&sure(btn,'Tap again to delete all '+hist.length)){hist=[];cur=null;store.set('eco_hist',hist);drawHist()}}
+drawHist();
+
+/* install as app */
+let dip=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();dip=e;$('inst').hidden=false});
+$('inst').addEventListener('click',async()=>{if(!dip)return;dip.prompt();await dip.userChoice;dip=null;$('inst').hidden=true});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
