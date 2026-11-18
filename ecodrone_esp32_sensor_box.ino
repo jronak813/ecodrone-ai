@@ -1,8 +1,10 @@
 /*
-  EcoDrone AI – ESP32 Sensor Stick
-  ================================
-  RGB colour sensor + light sensor + LiDAR distance + GPS + OLED display,
-  sending readings to the EcoDrone app by Bluetooth (phone) or USB (computer).
+  EcoDrone AI – ESP32 Ground Station
+  ==================================
+  1. DRONE SCAN DISPLAY: when the EcoDrone app scans a drone photo, it sends the result
+     here by Bluetooth or USB. The OLED shows the zone, macro %, micro % and location,
+     and the red / orange / green LED lights up for that zone.
+  2. SENSORS: RGB colour sensor + light sensor + LiDAR distance + GPS, sent to the app.
 
   Every half second it sends one line, for example:
       R:120,G:80,B:60,L:55,D:3.2,LAT:24.585400,LON:73.712500,SAT:7,SAVE:0
@@ -26,6 +28,9 @@
     NEO-6M     VCC->VIN (5V)  GND->GND  TX->GPIO16  RX->GPIO17
     LDR        3V3 -> LDR -> GPIO34 -> 10k resistor -> GND
     Button     the ESP32's own BOOT button (GPIO0) – nothing to wire
+    Zone LEDs  GPIO13 -> 220 ohm -> RED LED    -> GND
+               GPIO27 -> 220 ohm -> ORANGE/YELLOW LED -> GND
+               GPIO14 -> 220 ohm -> GREEN LED  -> GND
 
   LIBRARIES (Arduino IDE > Library Manager)
     Adafruit TCS34725, Adafruit_VL53L0X, Adafruit SSD1306, Adafruit GFX Library, TinyGPSPlus
@@ -58,17 +63,57 @@ const bool CALIBRATE = false;
 float WHITE_R = 2600, WHITE_G = 3000, WHITE_B = 2700;   // replace with your white-paper RAW values
 const float D_MIN = 2.0, D_MAX = 8.0;                   // good distance band in cm (same as the app)
 const int PIN_LDR = 34, PIN_BTN = 0, GPS_RX = 16, GPS_TX = 17;
+const int LED_RED = 13, LED_ORANGE = 27, LED_GREEN = 14;
+const unsigned long DRONE_PAGE_MS = 15000;              // show a new drone scan for 15 s, then switch pages
 
 // ---------- Bluetooth (Nordic UART service – the app looks for this) ----------
 #define NUS_SERVICE "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 #define NUS_TX      "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+#define NUS_RX      "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
 BLEServer* bleServer = nullptr;
 BLECharacteristic* txChar = nullptr;
 bool bleConnected = false;
+String rxBuf = "";            // text arriving from the app (Bluetooth or USB)
+volatile bool lineReady = false;
+String rxLine = "";
 class ServerCB : public BLEServerCallbacks {
   void onConnect(BLEServer* s) { bleConnected = true; }
   void onDisconnect(BLEServer* s) { bleConnected = false; s->startAdvertising(); }
 };
+class RxCB : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* c) {
+    String v = c->getValue().c_str();
+    for (unsigned int i = 0; i < v.length(); i++) {
+      char ch = v[i];
+      if (ch == '\n') { rxLine = rxBuf; rxBuf = ""; lineReady = true; }
+      else if (rxBuf.length() < 200) rxBuf += ch;
+    }
+  }
+};
+
+// ---------- last drone scan received from the app ----------
+struct DroneScan { bool has = false; String zone, mac, mic, items, red, conf, lat, lon, site; int count = 0; unsigned long at = 0; } scan;
+
+String field(const String& line, const String& key) {   // value of KEY:value in a comma line
+  int i = line.indexOf(key + ":");
+  if (i < 0) return "";
+  int a = i + key.length() + 1, b = line.indexOf(',', a);
+  return line.substring(a, b < 0 ? line.length() : b);
+}
+void setZoneLeds(const String& z) {
+  digitalWrite(LED_RED, z == "HIGH");
+  digitalWrite(LED_ORANGE, z == "MEDIUM");
+  digitalWrite(LED_GREEN, z == "LOW");
+}
+void handleAppLine(String line) {
+  line.trim();
+  if (field(line, "SCAN") != "1") return;
+  scan.has = true; scan.count++; scan.at = millis();
+  scan.zone = field(line, "ZONE"); scan.mac = field(line, "MAC"); scan.mic = field(line, "MIC");
+  scan.items = field(line, "ITEMS"); scan.red = field(line, "RED"); scan.conf = field(line, "CONF");
+  scan.lat = field(line, "LAT"); scan.lon = field(line, "LON"); scan.site = field(line, "SITE");
+  setZoneLeds(scan.zone);
+}
 
 // ---------- sensors ----------
 Adafruit_TCS34725 tcs(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
@@ -120,6 +165,9 @@ void sendLine(const String& line) {
 void setup() {
   Serial.begin(115200);
   pinMode(PIN_BTN, INPUT_PULLUP);
+  pinMode(LED_RED, OUTPUT); pinMode(LED_ORANGE, OUTPUT); pinMode(LED_GREEN, OUTPUT);
+  // quick LED test at start-up
+  setZoneLeds("HIGH"); delay(250); setZoneLeds("MEDIUM"); delay(250); setZoneLeds("LOW"); delay(250); setZoneLeds("");
   analogReadResolution(12);
 
   Wire.begin(21, 22);
@@ -135,6 +183,8 @@ void setup() {
   BLEService* svc = bleServer->createService(NUS_SERVICE);
   txChar = svc->createCharacteristic(NUS_TX, BLECharacteristic::PROPERTY_NOTIFY);
   txChar->addDescriptor(new BLE2902());
+  BLECharacteristic* rxChar = svc->createCharacteristic(NUS_RX, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
+  rxChar->setCallbacks(new RxCB());
   svc->start();
   BLEAdvertising* adv = BLEDevice::getAdvertising();
   adv->addServiceUUID(NUS_SERVICE);
@@ -143,7 +193,7 @@ void setup() {
 
   if (oledOK) {
     oled.clearDisplay(); oled.setTextColor(SSD1306_WHITE); oled.setTextSize(1);
-    oled.setCursor(0, 0);  oled.println("EcoDrone Sensor");
+    oled.setCursor(0, 0);  oled.println("EcoDrone Station");
     oled.println(tcsOK ? "RGB ok" : "RGB MISSING");
     oled.println(lidarOK ? "LiDAR ok" : "LiDAR MISSING");
     oled.println("GPS starting...");
@@ -154,6 +204,15 @@ void setup() {
 
 void loop() {
   while (gpsSerial.available()) gps.encode(gpsSerial.read());
+
+  // results sent by the app: by Bluetooth ...
+  if (lineReady) { lineReady = false; handleAppLine(rxLine); }
+  // ... or by USB
+  while (Serial.available()) {
+    char ch = Serial.read();
+    if (ch == '\n') { handleAppLine(rxBuf); rxBuf = ""; }
+    else if (rxBuf.length() < 200) rxBuf += ch;
+  }
 
   // BOOT button pressed = save this spot
   bool btn = digitalRead(PIN_BTN);
@@ -207,8 +266,21 @@ void loop() {
   line += ",SAT:" + String(sats) + ",SAVE:" + String(save ? 1 : 0) + "\n";
   sendLine(line);
 
-  // --- OLED ---
-  if (oledOK) {
+  // --- OLED: drone scan page (new scan, or every other 4 s) or sensor page ---
+  bool showDrone = scan.has && !savePressed && millis() > savedFlashUntil &&
+                   (millis() - scan.at < DRONE_PAGE_MS || (millis() / 4000) % 2 == 0);
+  if (oledOK && showDrone) {
+    oled.clearDisplay(); oled.setTextColor(SSD1306_WHITE);
+    oled.setTextSize(1); oled.setCursor(0, 0); oled.print("DRONE SCAN #"); oled.print(scan.count);
+    oled.setTextSize(2); oled.setCursor(0, 11);
+    oled.print(scan.zone == "HIGH" ? "RED ZONE" : scan.zone == "MEDIUM" ? "ORANGE" : "GREEN");
+    oled.setTextSize(1);
+    oled.setCursor(0, 30); oled.print("Macro "); oled.print(scan.mac); oled.print("% "); oled.print(scan.items); oled.print("pcs");
+    oled.setCursor(0, 39); oled.print("Micro "); oled.print(scan.mic); oled.print("%  C"); oled.print(scan.conf); oled.print("%");
+    oled.setCursor(0, 48); if (scan.site.length()) oled.print(scan.site); else { oled.print("Red land "); oled.print(scan.red); oled.print("%"); }
+    oled.setCursor(0, 57); if (scan.lat.length()) { oled.print(scan.lat); oled.print(","); oled.print(scan.lon); }
+    oled.display();
+  } else if (oledOK) {
     oled.clearDisplay(); oled.setTextSize(1); oled.setTextColor(SSD1306_WHITE);
     oled.setCursor(0, 0);  oled.print("EcoDrone  "); oled.print(bleConnected ? "BT on" : "BT --");
     oled.setCursor(0, 9);  oled.printf("RGB %3d %3d %3d", R, G, B);

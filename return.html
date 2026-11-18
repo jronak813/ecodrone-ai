@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Return this EcoDrone AI product</title>
+<meta name="description" content="This product holds a sealed microplastic capsule. Please do not throw it away. Return it so the sealed capsule can be safely reused.">
+<link rel="icon" type="image/png" href="favicon.png">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&family=Noto+Sans+Devanagari:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f6f4;--card:#fff;--ink:#12241d;--mut:#5b6e64;--line:#dbe4de;--acc:#0b7a5a;--accb:#e3f3ec;--hi:#e03131}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1813;--card:#13221b;--ink:#e8f1ea;--mut:#98ada1;--line:#233b30;--acc:#3ccf9a;--accb:#173529}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 Manrope,"Noto Sans Devanagari",system-ui,sans-serif}
+.wrap{max-width:640px;margin:auto;padding:28px 18px 48px}
+.top{display:flex;gap:12px;align-items:center;margin-bottom:18px}
+.logo{width:46px;height:46px;border-radius:12px;background:#0b7a5a;display:grid;place-items:center;flex:none}
+.logo i{width:22px;height:22px;border-radius:50%;border:4px solid #fff;display:block;position:relative}
+.logo i:after{content:"";position:absolute;inset:4px;border-radius:50%;background:#fff}
+h1{font-size:28px;line-height:1.2;margin:0 0 6px;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px;margin:14px 0}
+.big{font-size:22px;font-weight:800;color:var(--hi);margin:0}
+.id{display:inline-block;background:var(--accb);color:var(--acc);font-weight:800;padding:4px 14px;border-radius:99px;margin-top:6px}
+ol{padding-left:22px;margin:8px 0}li{margin:6px 0}
+.hi{font-family:"Noto Sans Devanagari",Manrope,sans-serif;color:var(--mut);font-size:16px}
+a{color:var(--acc);font-weight:700}
+small{color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><div class="logo" aria-hidden="true"><i></i></div><div><b>EcoDrone AI</b><br><small>Dhara Sharma &amp; Kayna Jain</small></div></div>
+
+<h1>Thank you for scanning!</h1>
+<p>This product has a <b>sealed capsule of microplastic</b> inside it. The microplastic was taken out of soil using our EcoDrone AI project, and it is locked in so it can never go back into nature.</p>
+<div id="idBox"></div>
+
+<div class="card">
+<p class="big">Please do not throw it away.</p>
+<p class="hi">कृपया इसे फेंकें नहीं।</p>
+<ol>
+<li>Do not put it in the dustbin, a drain, a river or a lake.</li>
+<li>Do not burn it, and do not try to open the capsule.</li>
+<li>If it breaks, keep <b>all the pieces</b> together in a small bag or jar.</li>
+</ol>
+<p class="hi">कूड़ेदान, नाली या झील में न डालें। जलाएँ नहीं, capsule न खोलें। टूट जाए तो सारे टुकड़े एक थैली में संभालकर रखें।</p>
+</div>
+
+<div class="card">
+<b>How to return it</b>
+<ol>
+<li>Bring it to the <b>return point written on your label</b> (our school or the EcoDrone AI stall).</li>
+<li>We will take out the sealed capsule <b>without opening it</b> and put it into a new product.</li>
+</ol>
+<p class="hi">लेबल पर लिखे return point पर लौटाएँ। हम capsule को बिना खोले नए product में लगा देंगे।</p>
+</div>
+
+<div class="card">
+<b>What is inside?</b>
+<p style="margin:6px 0 0">Microplastic in a capsule, sealed with a strong coating and then cast inside the product. Three layers keep it locked in.</p>
+</div>
+
+<p><a href="./">See how EcoDrone AI finds plastic with a drone →</a></p>
+</div>
+<script>
+try{const id=new URLSearchParams(location.search).get('id');if(id&&/^[A-Za-z0-9-]{1,20}$/.test(id)){const b=document.getElementById('idBox');b.innerHTML='<span class="id"></span>';b.firstChild.textContent='Product ID: '+id}}catch(e){}
+</script>
+</body>
+</html>
